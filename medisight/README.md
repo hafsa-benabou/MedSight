@@ -10,6 +10,7 @@ Plateforme d'information pharmaceutique pour le Maroc (ChallengeCamp Data Scienc
 | Lot | Contenu | État |
 |---|---|---|
 | **1. Données** | Schéma PostgreSQL (22 tables, migrations Alembic), importeurs AMMPS / répertoire des génériques / CNOPS / OpenStreetMap / gardes / RCP / interactions, provenance et statuts, échantillons réels, démo simulée, CLI, tests | **Livré et testé** |
+| **1 bis. Enrichissement (phase 1)** | Révision 0002 (photos, annotations OCR, variantes de noms, conditionnement, marché des sources) ; répertoire vérifié par dosage et forme ; GTIN-14 ; CNOPS historique uniquement ; terminologie BDPM ; contrôle qualité `quality --strict` ; recherche par code-barres | **Livré et testé** (26/10/2026) |
 | 2a. API catalogue | API REST FastAPI : santé, sources, recherche tolérante aux fautes (dosage jamais substitué), fiches, génériques réglementaires vs composition, pharmacies, gardes | **Livré et testé** |
 | 2b. NLP + chatbot | Normalisation darija/arabizi, langue, entités, intentions, chatbot | Prochain lot |
 | 3. Pill Identifier | Qualité d'image, code-barres EAN-13, OCR Tesseract, caractéristiques visuelles, fusion des indices | À venir |
@@ -51,7 +52,19 @@ uvicorn app.main:app --reload --port 8000
 ```
 Puis ouvrir http://localhost:8000/docs (documentation interactive Swagger) — par exemple `GET /api/medicines/search?q=dolipran 500mg`.
 
-## Tests réellement exécutés (25/10/2026, PostgreSQL 16.15, Python 3.12)
+## Tests réellement exécutés (26/10/2026, phase 1, PostgreSQL 16.15, Python 3.11.9)
+`34 passed` (20 tests existants, dont 3 adaptés aux nouvelles règles, + 14 nouveaux dans `tests/test_data_quality.py`) : découpage
+des libellés du répertoire ancré sur le groupe (FUSIDATE PHARMA 5 2 %), équivalence de dosages sans confusion (concentration ≠ dose,
+« 0,02 » = « 2 % »), membres de dosage ou de forme différents non rattachés, GTIN-14, conditionnement non deviné, ligne simulée
+refusée sur une fiche officielle, BDPM limitée aux termes de recherche (faux positifs réels écartés), variantes de noms sourcées,
+contrôle qualité (0 critique sur le seed, violations provoquées détectées), recherche exacte par code-barres, faute de frappe sans
+changement de dosage, marché des sources, prix minimal sans présentation simulée.
+Également vérifiés : `alembic upgrade` 0001 → 0002, `downgrade` puis `upgrade` sur une base déjà remplie (aucune ligne perdue),
+`alembic check` (modèle et migrations synchronisés), import du vrai `CIS_COMPO_bdpm.txt` (32 439 lignes, deux passages),
+`quality --strict` (code de sortie 0), API lancée avec uvicorn (santé, sources, recherche, code-barres, autocomplétion, fiche,
+génériques, `/docs`). Non exécutés : import CNOPS réel (data.gov.ma en HTTP 503), `next build` (frontend non modifié).
+
+## Tests exécutés précédemment (25/10/2026, PostgreSQL 16.15, Python 3.12)
 `20 passed` (12 données + 8 API). Données : parsing des prix (formats AMMPS), dosages multiples et concentrations, formes canoniques, validation EAN-13,
 jointure AMMPS × répertoire (prix + code-barres sur la même présentation), rejet des anomalies d'origine, idempotence,
 étiquetage et purge des données simulées, non-écrasement d'un prix AMMPS 2026 par un prix CNOPS 2014, extraction de rubriques
@@ -63,7 +76,9 @@ Site (25/10/2026) : `next build` sans erreur (9 routes) ; les 8 pages répondent
 ## Règles de fiabilité appliquées dès ce lot
 - Chaque valeur porte sa source, sa date de version et un statut : `official`, `reference`, `unverified` ou `simulated`.
 - Aucun prix, stock, adresse, interaction ou texte clinique n'est inventé ; les données de démonstration sont marquées `simulated` et supprimables (`purge-simulated`).
-- Les prix CNOPS (2014) ne remplacent jamais les prix AMMPS (base mise à jour le 01/10/2026).
+- Les prix CNOPS (2014) ne remplacent jamais les prix AMMPS (base mise à jour le 01/10/2026) et ne sont jamais présentés comme prix courants (valeurs historiques datées dans `reimbursements`).
+- Les sources étrangères (BDPM, France) n'enrichissent que la terminologie des substances ; aucune présentation ni aucun prix étranger.
+- `python -m app.ingestion.cli quality --strict` contrôle ces règles après chaque import.
 - Pas de collecte automatisée du site AMMPS (« tous droits réservés ») sans autorisation : import d'exports ou saisie manuelle.
 
 ## Documentation

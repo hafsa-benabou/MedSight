@@ -72,7 +72,8 @@ def sources(db: Session = Depends(get_db)):
         last = db.scalar(select(m.DataImport).where(m.DataImport.source_id == s.id, m.DataImport.status.in_(["success", "partial"]))
                          .order_by(m.DataImport.finished_at.desc()).limit(1))
         out.append({"code": s.code, "name": s.name, "publisher": s.publisher, "url": s.url, "license": s.license,
-                    "is_official": s.is_official, "default_data_status": s.default_data_status, "notes": s.notes,
+                    "is_official": s.is_official, "default_data_status": s.default_data_status, "market": s.market,
+                    "reuse_conditions": s.reuse_conditions, "notes": s.notes,
                     "last_import": None if last is None else {
                         "finished_at": last.finished_at.isoformat() if last.finished_at else None, "method": last.method,
                         "version_date": last.source_version_date.isoformat() if last.source_version_date else None,

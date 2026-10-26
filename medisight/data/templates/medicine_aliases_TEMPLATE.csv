@@ -1,0 +1,2 @@
+# Une ligne = une variante DOCUMENTÉE d'un nom commercial existant (SPECIALITE + DOSAGE + FORME identiques à la base). TYPE : brand_variant | arabic_script | packaging_text | ocr_variant ; LANGUE : fr | ar | en | lat. SOURCE REFERENCE obligatoire (ex. photo d'emballage n°, notice, RCP).
+SPECIALITE;DOSAGE;FORME;ALIAS;LANGUE;TYPE;SOURCE REFERENCE

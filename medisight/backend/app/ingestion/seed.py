@@ -115,7 +115,7 @@ def seed_all(db: Session, data_dir: Path | None = None, include_simulated: bool 
 
 def purge_simulated(db: Session) -> dict:
     counts = {}
-    for model in (m.PharmacyInventory, m.PharmacyDutyShift, m.Pharmacy, m.MedicinePresentation, m.Medicine,
+    for model in (m.PharmacyInventory, m.PharmacyDutyShift, m.Pharmacy, m.MedicineAlias, m.MedicinePresentation, m.Medicine,
                   m.ClinicalSection, m.DrugInteraction, m.MedicineImage):
         counts[model.__tablename__] = db.execute(delete(model).where(model.data_status == "simulated")).rowcount
     db.commit()

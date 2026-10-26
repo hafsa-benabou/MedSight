@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 
 from app import models as m
 from app.core.ean import normalize_ean
-from app.ingestion.common import (RefCache, cell, import_run, medicine_key, read_rows, split_substances,
-                                  upsert_medicine, upsert_presentation)
+from app.ingestion.common import (DOSAGE_EXPR, RefCache, canonical_form, cell, import_run, medicine_key, read_rows,
+                                  split_substances, strengths_equivalent, upsert_medicine, upsert_presentation)
 from app.nlp.text import normalize_text
 
 GENERIC_COLUMNS = {
@@ -47,9 +47,44 @@ def parse_group_label(label: str) -> tuple[list[str], str | None, str | None]:
     return split_substances(" ".join(tokens[:first])), dosage, " ".join(rest) or None
 
 
-def parse_member_label(label: str) -> tuple[str, str | None, str | None, str | None]:
-    """« AMLOR 5 MG COMPRIME BOITE DE 28 » -> ("AMLOR", "5 MG", "COMPRIME", "BOITE DE 28")."""
+def _find(tokens: list[str], needle: str | None, start: int = 1) -> int | None:
+    """Position de la séquence de mots `needle` (comparaison normalisée) dans `tokens`, à partir de `start`."""
+    wanted = normalize_text(needle or "")
+    if not wanted:
+        return None
+    n = len(needle.split())
+    for i in range(start, len(tokens) - n + 1):
+        if normalize_text(" ".join(tokens[i:i + n])) == wanted:
+            return i
+    return None
+
+
+def _split_tail(brand_tokens: list[str], dosage: str | None, rest: list[str]) -> tuple[str, str | None, str | None, str | None]:
+    tail = " ".join(rest)
+    found = _PRESENTATION_RE.search(tail)
+    if found:
+        return " ".join(brand_tokens), dosage, tail[:found.start()].strip() or None, tail[found.start():].strip()
+    return " ".join(brand_tokens), dosage, tail or None, None
+
+
+def parse_member_label(label: str, group_dosage: str | None = None,
+                       group_form: str | None = None) -> tuple[str, str | None, str | None, str | None]:
+    """« AMLOR 5 MG COMPRIME BOITE DE 28 » -> ("AMLOR", "5 MG", "COMPRIME", "BOITE DE 28").
+
+    Le dosage et la forme du groupe servent d'ancres : « FUSIDATE PHARMA 5 2% CREME » (groupe « … 0,02 CREME »)
+    donne la marque « FUSIDATE PHARMA 5 » et le dosage « 2% », et non « FUSIDATE PHARMA » / « 5 2% »."""
     tokens = label.split()
+    at = _find(tokens, group_dosage)
+    if at is not None:
+        n = len(group_dosage.split())
+        return _split_tail(tokens[:at], " ".join(tokens[at:at + n]), tokens[at + n:])
+    form_at = _find(tokens, group_form, start=2)
+    if form_at is not None:
+        # plus long suffixe bien formé (« 2% », « 0,5 G / 0,002 G ») juste avant la forme, en gardant un mot de marque
+        for j in range(1, form_at):
+            candidate = " ".join(tokens[j:form_at])
+            if DOSAGE_EXPR.match(normalize_text(candidate)):
+                return _split_tail(tokens[:j], candidate, tokens[form_at:])
     first = next((i for i in range(1, len(tokens)) if re.match(r"^\d", tokens[i])), None)
     if first is None:
         return label.strip(), None, None, None
@@ -82,15 +117,25 @@ def import_generics_file(db: Session, path: str | Path, *, edition: str | None =
                 db.add(group)
                 db.flush()
             groups[gkey] = group
-            substances, _, _ = parse_group_label(group_label)
-            brand, dosage, form, presentation = parse_member_label(spec)
+            substances, group_dosage, group_form = parse_group_label(group_label)
+            brand, dosage, form, presentation = parse_member_label(spec, group_dosage, group_form)
             lab = cell(row, mapping, "laboratory")
             code, ean_status = normalize_ean(cell(row, mapping, "ean"))
-            if ean_status in ("invalid_checksum", "not_ean13"):
-                ctx.warn(f"Code-barres {code} ({ean_status}) pour {spec}", line)
-            med = db.scalar(select(m.Medicine).where(m.Medicine.source_record_key == medicine_key(brand, dosage, form)))
-            method_used = "exact" if med else "unmatched"
-            if med is None and create_missing and dosage:
+            if ean_status in ("invalid_checksum", "not_ean13", "gtin14"):
+                ctx.warn(f"Code-barres {code} ({ean_status}) pour {spec} : non utilisé comme EAN-13", line)
+            # Équivalence réglementaire vérifiée : le membre doit avoir le dosage et la forme du groupe
+            same_dose = strengths_equivalent(dosage, group_dosage)
+            gcanon, mcanon = canonical_form(group_form), canonical_form(form)
+            same_form = None if not (gcanon and mcanon) else gcanon == mcanon
+            consistent = same_dose is not False and same_form is not False
+            if not consistent:
+                ctx.warn(f"{spec} : dosage « {dosage} » ou forme « {form} » différent du groupe « {group_label} » ; "
+                         "membre conservé sans rattachement", line)
+            med = None
+            if consistent:
+                med = db.scalar(select(m.Medicine).where(m.Medicine.source_record_key == medicine_key(brand, dosage, form)))
+            method_used = "exact" if med else ("unmatched" if consistent else "inconsistent")
+            if med is None and consistent and create_missing and dosage:
                 med, _ = upsert_medicine(ctx, cache, brand=brand, dosage=dosage, form_label=form, substances=substances,
                                          laboratory=lab, princeps=member_type[:1], data_status="official")
                 method_used = "created"

@@ -47,7 +47,10 @@ def test_strengths_forms_and_status():
 def test_ean13_validation():
     assert ean13_is_valid("6118000480020")
     assert normalize_ean("6118000140671")[1] == "invalid_checksum"
-    assert normalize_ean("27037960641780")[1] == "not_ean13"
+    assert normalize_ean("27037960641780") == ("27037960641780", "gtin14")  # CLARISCAN : GTIN-14 logistique valide
+    assert normalize_ean("06118000480020") == ("6118000480020", "valid")    # DataMatrix : « 0 » + EAN-13
+    assert normalize_ean("27037960641781")[1] == "invalid_checksum"
+    assert normalize_ean("611800048002")[1] == "not_ean13"
     assert normalize_ean("-") == (None, "missing")
 
 
@@ -64,7 +67,7 @@ def test_seed_joins_sources_and_reports_anomalies(seeded):
     assert all(p.data_status == "official" and p.price_as_of == date(2026, 10, 1) for p in avt)
     run = db.scalar(select(m.DataImport).join(m.DataSource).where(m.DataSource.code == "ammps_generiques"))
     messages = " ".join(i["message"] for i in run.report["issues"])
-    assert run.rows_rejected == 1 and "invalid_checksum" in messages and "not_ean13" in messages
+    assert run.rows_rejected == 1 and "invalid_checksum" in messages and "gtin14" in messages
     assert db.scalar(select(func.count()).where(m.MedicinePresentation.ean13 == "6118000140671")) == 0
     thiamine = db.scalar(select(m.ActiveIngredient).where(m.ActiveIngredient.name == "THIAMINE"))
     assert db.scalar(select(func.count()).where(m.MedicineIngredient.ingredient_id == thiamine.id)) == 1
@@ -112,8 +115,13 @@ def test_older_cnops_price_never_overrides_recent_ammps_price(db, tmp_path):
     reimb = db.scalar(select(m.Reimbursement).where(m.Reimbursement.raw_name == "TESTOMED"))
     assert reimb.base_remboursement_mad == Decimal("8.00") and reimb.taux_remboursement == Decimal("70.0")
     assert reimb.ppv_reference_mad == Decimal("9.90") and reimb.valid_as_of == date(2014, 1, 1)
+    # prix CNOPS 2014 : conservé comme référence historique datée, jamais comme prix courant de la présentation
     other = db.scalar(select(m.MedicinePresentation).join(m.Medicine).where(m.Medicine.brand_name == "AUTREMED"))
-    assert other.ppv_mad == Decimal("30.00") and other.price_as_of == date(2014, 1, 1)
+    assert other.ppv_mad is None and other.price_status == "unknown"
+    other_reimb = db.scalar(select(m.Reimbursement).where(m.Reimbursement.raw_name == "AUTREMED"))
+    assert other_reimb.ppv_reference_mad == Decimal("30.00") and other_reimb.valid_as_of == date(2014, 1, 1)
+    import_cnops_file(db, path, version_date=date(2014, 1, 1))  # ré-import : idempotent
+    assert db.scalar(select(func.count()).select_from(m.Reimbursement)) == 2
 
 
 def test_rcp_pdf_sections_keep_source(db, tmp_path):

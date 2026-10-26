@@ -29,58 +29,70 @@ SOURCES: dict[str, dict[str, Any]] = {
     "ammps_medicaments": dict(
         name="AMMPS — Base de données des médicaments", publisher="Agence Marocaine du Médicament et des Produits de Santé",
         url="https://www.ammps.gov.ma/recherche-medicaments", license="© AMMPS — tous droits réservés",
-        reuse_conditions=_AMMPS_RIGHTS, is_official=True, default_data_status="official",
+        reuse_conditions=_AMMPS_RIGHTS, is_official=True, default_data_status="official", market="MA",
         notes="Base affichant une mise à jour au 01/10/2026 (9 936 médicaments). Référence prioritaire pour les prix."),
     "ammps_generiques": dict(
         name="AMMPS — Répertoire Marocain des Médicaments Génériques", publisher="AMMPS",
         url="https://www.ammps.gov.ma/repertoire-medicaments-generiques", license="© AMMPS — tous droits réservés",
-        reuse_conditions=_AMMPS_RIGHTS, is_official=True, default_data_status="official",
+        reuse_conditions=_AMMPS_RIGHTS, is_official=True, default_data_status="official", market="MA",
         notes="Édition projet (janvier 2026), évolutive : vérifier la dernière version avant usage."),
     "ammps_pharmacies": dict(
         name="AMMPS — Base de données des pharmacies", publisher="AMMPS",
         url="https://www.ammps.gov.ma/bases-de-donnees/pharmacies", license="© AMMPS — tous droits réservés",
-        reuse_conditions=_AMMPS_RIGHTS, is_official=True, default_data_status="official",
+        reuse_conditions=_AMMPS_RIGHTS, is_official=True, default_data_status="official", market="MA",
         notes="Nom et ville uniquement (pas d'adresse, téléphone ni coordonnées)."),
     "cnops_referentiel": dict(
         name="CNOPS — Référentiel des médicaments (data.gov.ma)", publisher="Caisse Nationale des Organismes de Prévoyance Sociale",
         url="https://data.gov.ma/data/dataset/referentiel-des-medicaments", license="ODbL 1.0",
         license_url="https://opendatacommons.org/licenses/odbl/1-0/",
         reuse_conditions="Réutilisation libre avec attribution ; partage à l'identique des bases dérivées (ODbL).",
-        is_official=True, default_data_status="official",
+        is_official=True, default_data_status="official", market="MA",
         notes="Fichier ref-des-medicaments-cnops-2014.xlsx (ressource mise à jour le 18/12/2017) : prix potentiellement obsolètes."),
     "osm_pharmacies": dict(
         name="OpenStreetMap — pharmacies (amenity=pharmacy)", publisher="Contributeurs OpenStreetMap",
         url="https://www.openstreetmap.org/copyright", license="ODbL 1.0",
         license_url="https://opendatacommons.org/licenses/odbl/1-0/",
         reuse_conditions="Attribution obligatoire : « © les contributeurs d'OpenStreetMap ».",
-        is_official=False, default_data_status="unverified"),
+        is_official=False, default_data_status="unverified", market="MA"),
     "duty_manual": dict(
         name="Pharmacies de garde — import manuel", publisher="Équipe MEDISIGHT", license="Selon la source saisie",
         reuse_conditions="Vérifier les conditions de réutilisation de chaque liste de garde avant import.",
-        is_official=False, default_data_status="unverified"),
+        is_official=False, default_data_status="unverified", market="MA"),
     "rcp_documents": dict(
         name="RCP / notices importés", publisher="Titulaires d'AMM (via documents fournis)", license="Document source",
         reuse_conditions="Extraits de sections citées avec leur source ; usage d'information uniquement.",
-        is_official=False, default_data_status="unverified"),
+        is_official=False, default_data_status="unverified", market="INT"),
     "medbase_api": dict(
         name="MedBase API", publisher="MedBase", url="https://medbase.ma/api/documentation",
-        license="Accès sur clé API (conditions MedBase)", is_official=False, default_data_status="reference"),
+        license="Accès sur clé API (conditions MedBase)", is_official=False, default_data_status="reference", market="MA"),
     "ddinter": dict(
         name="DDInter 2.0", publisher="SCBDD", url="https://ddinter2.scbdd.com", license="CC BY-NC-SA 4.0",
         license_url="https://creativecommons.org/licenses/by-nc-sa/4.0/",
         reuse_conditions="Usage non commercial, attribution, partage à l'identique.", is_official=False,
-        default_data_status="reference"),
+        default_data_status="reference", market="INT"),
     "manual_interactions": dict(
         name="Interactions — saisie manuelle sourcée", publisher="Équipe MEDISIGHT", license="Selon la référence citée",
-        is_official=False, default_data_status="unverified"),
+        is_official=False, default_data_status="unverified", market="INT"),
+    "bdpm_fr": dict(
+        name="BDPM — Base de données publique des médicaments (France)", publisher="ANSM / HAS / Assurance Maladie",
+        url="https://base-donnees-publique.medicaments.gouv.fr/telechargement", license="Licence Ouverte Etalab 2.0",
+        license_url="https://github.com/etalab/licence-ouverte/blob/master/LO.md",
+        reuse_conditions="Réutilisation libre avec mention de la source et de la date de mise à jour.",
+        is_official=False, default_data_status="reference", market="FR",
+        notes="Marché français : utilisée uniquement pour la terminologie des substances (sels / fractions thérapeutiques). "
+              "Aucune présentation, aucun prix ni aucune spécialité française n'est importé dans le catalogue marocain."),
+    "manual_aliases": dict(
+        name="Variantes de noms commerciaux — saisie sourcée", publisher="Équipe MEDISIGHT", license="Selon la référence citée",
+        reuse_conditions="Chaque variante cite sa référence (photo d'emballage, notice, RCP).", is_official=False,
+        default_data_status="unverified", market="MA"),
     "demo_simulated": dict(
         name="Jeu de démonstration MEDISIGHT (simulé)", publisher="Équipe MEDISIGHT", license="Données fictives",
         reuse_conditions="Ne jamais présenter comme des données réelles.", is_official=False,
-        default_data_status="simulated"),
+        default_data_status="simulated", market="MA"),
     "team_nlp_dataset": dict(
         name="Corpus d'énoncés annotés MEDISIGHT", publisher="Équipe MEDISIGHT", license="Interne au projet",
         notes="Énoncés rédigés par l'équipe (synthétiques), à compléter par des énoncés réels anonymisés et consentis.",
-        is_official=False, default_data_status="unverified"),
+        is_official=False, default_data_status="unverified", market="MA"),
 }
 
 
@@ -96,6 +108,8 @@ def get_source(db: Session, code: str) -> m.DataSource:
         src = m.DataSource(code=code, **SOURCES[code])
         db.add(src)
         db.flush()
+    elif src.market is None and code in SOURCES:
+        src.market = SOURCES[code].get("market")
     return src
 
 
@@ -313,6 +327,56 @@ def split_strengths(dosage: str | None, n: int) -> list[Strength | None]:
     return [Strength(dosage)] + [None] * (n - 1)
 
 
+_SIG_UNITS = r"mg|g|µg|mcg|ug|ml|l|ui|u|mui|mmol|meq|mbq|gbq|%|doses?|uceip"
+_SIG_ITEM = re.compile(rf"(\d+(?:\.\d+)?)\s*({_SIG_UNITS})?(?![a-z])|/\s*({_SIG_UNITS})(?![a-z])")
+DOSAGE_EXPR = re.compile(rf"^\d+(?:\.\d+)?(?: ?(?:{_SIG_UNITS}))?(?: / (?:\d+(?:\.\d+)?)?(?: ?(?:{_SIG_UNITS}))?)*$")
+
+
+def _dosage_items(text: str | None) -> list[tuple]:
+    items: list[tuple] = []
+    for num, unit, per in _SIG_ITEM.findall(normalize_text(text or "")):
+        if per:
+            items.append(("per", _UNIT_MAP.get(per, per)))
+            continue
+        u = _UNIT_MAP.get(unit, unit) if unit else None
+        value = Decimal(num)
+        if u in _MASS:
+            value, u = value * _MASS[u], "mg"
+        items.append(("num", value, u))
+    return items
+
+
+def strengths_equivalent(a: str | None, b: str | None) -> bool | None:
+    """Compare deux dosages écrits différemment : « 0,5 G » = « 500 MG » ; « 0,02 » (fraction) = « 2 % ».
+    Retourne None quand la comparaison est impossible (texte non structuré) : l'appelant ne doit alors rien déduire."""
+    ia, ib = _dosage_items(a), _dosage_items(b)
+    if not ia or not ib:
+        return None
+    if len(ia) != len(ib):
+        return False
+    unknown = False
+    for x, y in zip(ia, ib):
+        if x[0] != y[0]:
+            return False
+        if x[0] == "per":
+            if x[1] != y[1]:
+                return False
+            continue
+        (_, vx, ux), (_, vy, uy) = x, y
+        if ux == uy:
+            if vx != vy:
+                return False
+        elif {ux, uy} == {None, "%"}:
+            frac, pct = (vx, vy) if ux is None else (vy, vx)
+            if frac * 100 != pct:
+                return False
+        elif ux is None or uy is None:
+            unknown = True
+        else:
+            return False
+    return None if unknown else True
+
+
 _FORM_RULES = [
     (r"effervescent", "comprime_effervescent"), (r"orodispersible", "comprime_orodispersible"),
     (r"\bcompr|\bcompeime|\bcomrime", "comprime"), (r"\bgelule", "gelule"), (r"\bcapsule", "capsule"),
@@ -348,6 +412,29 @@ def marketed_flag(status: str | None) -> bool | None:
 def norm_princeps(raw: Any) -> str | None:
     n = normalize_text(raw or "").replace(" ", "")
     return {"pp": "P", "p": "P", "princeps": "P", "gn": "G", "g": "G", "generique": "G", "i": "I"}.get(n)
+
+
+_PACK_CONTAINERS = r"BOITES?|BOÎTES?|ETUIS?|ÉTUIS?|FLACONS?|TUBES?|POTS?|PLAQUETTES?|SACHETS?|AMPOULES?|FLACON MONO ?DOSE"
+_PACK_UNITS = {"g": "g", "gr": "g", "mg": "mg", "ml": "ml", "l": "l", "comprimes": "comprime", "comprime": "comprime", "cp": "comprime",
+               "gelules": "gelule", "gelule": "gelule", "sachets": "sachet", "sachet": "sachet", "ampoules": "ampoule",
+               "ampoule": "ampoule", "doses": "dose", "dose": "dose", "suppositoires": "suppositoire",
+               "capsules": "capsule", "flacons": "flacon", "stylos": "stylo", "seringues": "seringue"}
+_PACK_RE = re.compile(rf"^(?:{_PACK_CONTAINERS})\s+(?:D'UN|D UN|DE)\s+(\d+(?:[.,]\d+)?)\s*([A-ZÉÈa-zéè]+)?\s*$", re.I)
+
+
+def parse_pack(label: str | None) -> tuple[Decimal | None, str | None]:
+    """Conditionnement non ambigu uniquement : « BOITE DE 28 » -> (28, None) ; « TUBE DE 15 G » -> (15, "g") ;
+    « BOITE DE 8 SACHETS » -> (8, "sachet"). Plusieurs niveaux (« BOITE DE 1 FLACON DE 120 ») -> (None, None)."""
+    if not label:
+        return None, None
+    text = re.sub(r"\s+", " ", label.replace("’", "'")).strip()
+    match = _PACK_RE.match(text)
+    if not match:
+        return None, None
+    unit_raw = normalize_text(match.group(2) or "")
+    if unit_raw and unit_raw not in _PACK_UNITS:
+        return None, None
+    return Decimal(match.group(1).replace(",", ".")), _PACK_UNITS.get(unit_raw)
 
 
 def medicine_key(brand: str, dosage: str | None, form: str | None) -> str:
@@ -424,7 +511,7 @@ class RefCache:
 def upsert_medicine(ctx: ImportContext, cache: RefCache, *, brand: str, dosage: str | None, form_label: str | None,
                     substances: list[str], laboratory: str | None = None, therapeutic_class: str | None = None,
                     princeps: str | None = None, amm_status: str | None = None, marketing_status: str | None = None,
-                    rcp_url: str | None = None, atc: str | None = None,
+                    rcp_url: str | None = None, atc: str | None = None, source_url: str | None = None,
                     data_status: str | None = None) -> tuple[m.Medicine, bool]:
     key = medicine_key(brand, dosage, form_label)
     status = data_status or ctx.source.default_data_status
@@ -445,6 +532,7 @@ def upsert_medicine(ctx: ImportContext, cache: RefCache, *, brand: str, dosage: 
     if marketing_status:
         med.marketing_status, med.is_marketed = marketing_status, marketed_flag(marketing_status)
     med.rcp_url = rcp_url or med.rcp_url
+    med.source_url = source_url or med.source_url
     med.atc_code = atc or med.atc_code
     med.data_status, med.source_id = status, ctx.source.id
     if substances:
@@ -459,9 +547,20 @@ def upsert_medicine(ctx: ImportContext, cache: RefCache, *, brand: str, dosage: 
                     position=pos, ingredient=ing, strength_text=st.text if st else None,
                     strength_value=st.value if st else None, strength_unit=st.unit if st else None,
                     strength_mg=st.mg if st else None))
-    med.search_text = normalize_text(" ".join([brand, dosage or "", " ".join(substances), form_label or ""]))
+    ctx.db.flush()
+    refresh_search_text(med)
     ctx.db.flush()
     return med, created
+
+
+def refresh_search_text(med: m.Medicine) -> None:
+    """Texte indexé (trigrammes) : nom, dosage, forme, substances et leurs termes de recherche, variantes sourcées."""
+    parts = [med.brand_name, med.dosage_text or "", med.form.label if med.form else ""]
+    for mi in med.ingredients:
+        parts.append(mi.ingredient.name)
+        parts.extend(mi.ingredient.search_terms or [])
+    parts.extend(a.alias for a in med.aliases if a.data_status != "simulated" or med.data_status == "simulated")
+    med.search_text = normalize_text(" ".join(dict.fromkeys(p for p in parts if p)))
 
 
 def upsert_presentation(ctx: ImportContext, med: m.Medicine, *, label: str | None, ppv: Decimal | None = None,
@@ -477,6 +576,8 @@ def upsert_presentation(ctx: ImportContext, med: m.Medicine, *, label: str | Non
         pres = m.MedicinePresentation(label=text, label_normalized=key, data_status=status, source_id=ctx.source.id,
                                       price_status="unknown")
         med.presentations.append(pres)
+    if pres.pack_quantity is None:
+        pres.pack_quantity, pres.pack_unit = parse_pack(text)
     if ean is not None:
         code, est = normalize_ean(ean)
         if code and est != "valid":

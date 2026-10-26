@@ -43,6 +43,7 @@ class DataSource(Base):
     reuse_conditions: Mapped[str | None] = mapped_column(Text)
     is_official: Mapped[bool] = mapped_column(Boolean, default=False)
     default_data_status: Mapped[str] = mapped_column(String(16), default="unverified")
+    market: Mapped[str | None] = mapped_column(String(8))  # MA | FR | US | INT : jamais de fusion entre marchés
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _created()
 
@@ -95,7 +96,11 @@ class ActiveIngredient(Base):
     name_normalized: Mapped[str] = mapped_column(String(255), unique=True)
     inn_en: Mapped[str | None] = mapped_column(String(255))
     name_ar: Mapped[str | None] = mapped_column(String(255))
-    synonyms: Mapped[list[str] | None] = mapped_column(JSONType, default=list)
+    synonyms: Mapped[list[str] | None] = mapped_column(JSONType, default=list)  # résolution à l'import (même entité)
+    # Termes de recherche uniquement (ex. sels issus de la BDPM) : jamais utilisés pour résoudre une substance à
+    # l'import, car un dosage exprimé en sel (bésilate d'amlodipine) n'est pas un dosage en base (amlodipine).
+    search_terms: Mapped[list[str] | None] = mapped_column(JSONType, default=list)
+    external_codes: Mapped[dict[str, Any] | None] = mapped_column(JSONType)  # ex. {"bdpm_substance": "39727"}
 
 
 class Medicine(Base):
@@ -120,6 +125,7 @@ class Medicine(Base):
     is_marketed: Mapped[bool | None] = mapped_column(Boolean)
     princeps_status: Mapped[str | None] = mapped_column(String(4))  # P | G | I
     rcp_url: Mapped[str | None] = mapped_column(String(500))
+    source_url: Mapped[str | None] = mapped_column(String(500))  # fiche ou page source de l'enregistrement
     search_text: Mapped[str] = mapped_column(Text, default="")
     data_status: Mapped[str] = _status()
     source_id: Mapped[int] = mapped_column(ForeignKey("data_sources.id"))
@@ -135,6 +141,27 @@ class Medicine(Base):
         back_populates="medicine", cascade="all, delete-orphan", order_by="MedicineIngredient.position")
     presentations: Mapped[list[MedicinePresentation]] = relationship(
         back_populates="medicine", cascade="all, delete-orphan", order_by="MedicinePresentation.id")
+    aliases: Mapped[list[MedicineAlias]] = relationship(back_populates="medicine", cascade="all, delete-orphan",
+                                                        order_by="MedicineAlias.id")
+
+
+class MedicineAlias(Base):
+    """Variante d'un nom commercial (écriture arabe, graphie de l'emballage, variante OCR), toujours sourcée."""
+    __tablename__ = "medicine_aliases"
+    __table_args__ = (UniqueConstraint("medicine_id", "alias_normalized", name="uq_medicine_alias"), _status_check(),
+                      CheckConstraint("kind IN ('brand_variant','arabic_script','packaging_text','ocr_variant')",
+                                      name="alias_kind_valid"))
+    id: Mapped[int] = mapped_column(primary_key=True)
+    medicine_id: Mapped[int] = mapped_column(ForeignKey("medicines.id", ondelete="CASCADE"), index=True)
+    alias: Mapped[str] = mapped_column(String(255))
+    alias_normalized: Mapped[str] = mapped_column(String(255), index=True)
+    language: Mapped[str | None] = mapped_column(String(12))  # fr | ar | en | lat
+    kind: Mapped[str] = mapped_column(String(24))
+    source_id: Mapped[int] = mapped_column(ForeignKey("data_sources.id"))
+    source_reference: Mapped[str | None] = mapped_column(String(500))
+    data_status: Mapped[str] = _status()
+    created_at: Mapped[datetime] = _created()
+    medicine: Mapped[Medicine] = relationship(back_populates="aliases")
 
 
 class MedicineIngredient(Base):
@@ -159,6 +186,10 @@ class MedicinePresentation(Base):
     label_normalized: Mapped[str] = mapped_column(String(500))
     ean13: Mapped[str | None] = mapped_column(String(14), index=True)
     ean_status: Mapped[str | None] = mapped_column(String(24))
+    # Conditionnement structuré, déduit du libellé seulement quand il est sans ambiguïté (« BOITE DE 28 » -> 28, None ;
+    # « TUBE DE 15 G » -> 15, g). « BOITE DE 1 FLACON DE 120 » reste à None : jamais de valeur devinée.
+    pack_quantity: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
+    pack_unit: Mapped[str | None] = mapped_column(String(16))
     ppv_mad: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     ph_mad: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     pfht_mad: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
@@ -329,8 +360,12 @@ class PharmacyInventory(Base):
 
 
 class MedicineImage(Base):
+    """Photo de référence pour le Pill Identifier : rattachée de préférence à une présentation (boîte + EAN-13)."""
     __tablename__ = "medicine_images"
-    __table_args__ = (CheckConstraint("kind IN ('box','pill','blister')", name="kind_valid"), _status_check())
+    __table_args__ = (CheckConstraint("kind IN ('box','pill','blister')", name="kind_valid"), _status_check(),
+                      CheckConstraint("view IS NULL OR view IN ('front','back','side','top','bottom','inside','other')",
+                                      name="view_valid"),
+                      UniqueConstraint("sha256", name="uq_medicine_images_sha256"))
     id: Mapped[int] = mapped_column(primary_key=True)
     medicine_id: Mapped[int | None] = mapped_column(ForeignKey("medicines.id", ondelete="SET NULL"), index=True)
     presentation_id: Mapped[int | None] = mapped_column(ForeignKey("medicine_presentations.id", ondelete="SET NULL"))
@@ -340,6 +375,12 @@ class MedicineImage(Base):
     license: Mapped[str] = mapped_column(String(255))
     attribution: Mapped[str | None] = mapped_column(String(500))
     is_moroccan_reference: Mapped[bool] = mapped_column(Boolean, default=False)
+    view: Mapped[str | None] = mapped_column(String(16))  # face photographiée
+    packaging_languages: Mapped[list[str] | None] = mapped_column(JSONType)  # ex. ["fr", "ar"]
+    origin: Mapped[str | None] = mapped_column(String(32))  # team_photo | manufacturer | public_dataset | user_consented
+    width_px: Mapped[int | None] = mapped_column(Integer)
+    height_px: Mapped[int | None] = mapped_column(Integer)
+    captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     features: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
     embedding: Mapped[bytes | None] = mapped_column(LargeBinary)
     embedding_model: Mapped[str | None] = mapped_column(String(64))
@@ -347,6 +388,28 @@ class MedicineImage(Base):
     source_id: Mapped[int] = mapped_column(ForeignKey("data_sources.id"))
     data_status: Mapped[str] = _status()
     created_at: Mapped[datetime] = _created()
+    annotations: Mapped[list[ImageAnnotation]] = relationship(back_populates="image", cascade="all, delete-orphan",
+                                                              order_by="ImageAnnotation.id")
+
+
+class ImageAnnotation(Base):
+    """Annotation d'une photo (vérité terrain humaine ou sortie OCR/détecteur) : texte, code-barres, zone."""
+    __tablename__ = "image_annotations"
+    __table_args__ = (CheckConstraint("annotation_type IN ('ocr_text','brand','dosage','barcode','pack_size','lot',"
+                                      "'expiry','bbox_box','bbox_pill','other')", name="annotation_type_valid"),
+                      CheckConstraint("annotator IN ('human','model')", name="annotator_valid"))
+    id: Mapped[int] = mapped_column(primary_key=True)
+    image_id: Mapped[int] = mapped_column(ForeignKey("medicine_images.id", ondelete="CASCADE"), index=True)
+    annotation_type: Mapped[str] = mapped_column(String(16))
+    value: Mapped[str | None] = mapped_column(Text)
+    language: Mapped[str | None] = mapped_column(String(12))
+    bbox: Mapped[dict[str, Any] | None] = mapped_column(JSONType)  # {"x":..,"y":..,"w":..,"h":..} en pixels
+    confidence: Mapped[float | None] = mapped_column(Float)
+    annotator: Mapped[str] = mapped_column(String(8))
+    model_name: Mapped[str | None] = mapped_column(String(64))
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = _created()
+    image: Mapped[MedicineImage] = relationship(back_populates="annotations")
 
 
 class IdentificationResult(Base):

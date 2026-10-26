@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -28,6 +29,10 @@ def stats(db) -> dict:
             out[model.__tablename__] = db.scalar(select(func.count()).select_from(model))
     out["active_ingredients"] = db.scalar(select(func.count()).select_from(m.ActiveIngredient))
     out["generic_group_members"] = db.scalar(select(func.count()).select_from(m.GenericGroupMember))
+    for model in (m.MedicineAlias, m.MedicineImage, m.ImageAnnotation):
+        out[model.__tablename__] = db.scalar(select(func.count()).select_from(model))
+    out["presentations_with_valid_ean13"] = db.scalar(select(func.count()).select_from(m.MedicinePresentation)
+                                                      .where(m.MedicinePresentation.ean_status == "valid"))
     out["last_imports"] = [
         {"source": r.source.code, "status": r.status, "method": r.method, "file": r.file_name,
          "version": str(r.source_version_date) if r.source_version_date else None, "finished": str(r.finished_at)}
@@ -53,7 +58,12 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--document-date", type=_date); s.add_argument("--from-ammps", action="store_true")
     s = sub.add_parser("import-interactions"); s.add_argument("file")
     s.add_argument("--source", choices=["ddinter", "manual_interactions"], default="manual_interactions")
-    for name in ("purge-simulated", "purge-expired", "stats"):
+    s = sub.add_parser("import-bdpm", help="Termes des substances depuis la BDPM (CIS_COMPO_bdpm.txt)"); s.add_argument("file")
+    s.add_argument("--version-date", type=_date)
+    s = sub.add_parser("import-aliases", help="Variantes de noms commerciaux sourcées (CSV modèle)"); s.add_argument("file")
+    s = sub.add_parser("quality", help="Contrôle qualité de la base"); s.add_argument("--strict", action="store_true",
+                                                                               help="code de sortie 1 si contrôle critique")
+    for name in ("purge-simulated", "purge-expired", "stats", "reindex-search"):
         sub.add_parser(name)
     a = p.parse_args(argv)
 
@@ -90,6 +100,22 @@ def main(argv: list[str] | None = None) -> None:
         elif a.cmd == "import-interactions":
             from app.ingestion.interactions import import_interactions_file
             result = import_interactions_file(db, a.file, source_code=a.source)
+        elif a.cmd == "import-bdpm":
+            from app.ingestion.bdpm import import_bdpm_compositions
+            result = import_bdpm_compositions(db, a.file, version_date=a.version_date)
+        elif a.cmd == "import-aliases":
+            from app.ingestion.aliases import import_aliases_file
+            result = import_aliases_file(db, a.file)
+        elif a.cmd == "quality":
+            from app.ingestion.quality import run_quality_checks
+            result = run_quality_checks(db)
+        elif a.cmd == "reindex-search":
+            from app.ingestion.common import refresh_search_text
+            meds = list(db.scalars(select(m.Medicine)))
+            for med in meds:
+                refresh_search_text(med)
+            db.commit()
+            result = {"reindexed": len(meds)}
         elif a.cmd == "purge-simulated":
             from app.ingestion.seed import purge_simulated
             result = purge_simulated(db)
@@ -99,6 +125,8 @@ def main(argv: list[str] | None = None) -> None:
         else:
             result = stats(db)
     print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+    if a.cmd == "quality" and a.strict and result["critical"]:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

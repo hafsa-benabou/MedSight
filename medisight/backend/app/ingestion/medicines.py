@@ -6,6 +6,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app import models as m
 from app.ingestion.common import (RefCache, cell, import_run, norm_princeps, parse_price, read_rows,
                                   split_substances, upsert_medicine, upsert_presentation)
 
@@ -26,6 +27,7 @@ AMMPS_COLUMNS = {
     "ean": ["EAN", "EAN13", "EAN 13", "CODE EAN", "CODE BARRE"],
     "atc": ["ATC", "CODE ATC"],
     "rcp_url": ["RCP", "RCP URL", "LIEN RCP"],
+    "source_url": ["URL", "URL FICHE", "LIEN FICHE", "REFERENCE FICHE", "SOURCE URL"],
 }
 
 
@@ -52,7 +54,13 @@ def import_medicines_file(db: Session, path: str | Path, *, source_code: str = "
                 therapeutic_class=cell(row, mapping, "therapeutic_class"),
                 princeps=norm_princeps(cell(row, mapping, "princeps")), amm_status=cell(row, mapping, "amm_status"),
                 marketing_status=cell(row, mapping, "marketing_status"), rcp_url=cell(row, mapping, "rcp_url"),
-                atc=cell(row, mapping, "atc"), data_status=data_status)
+                atc=cell(row, mapping, "atc"), source_url=cell(row, mapping, "source_url"), data_status=data_status)
+            status = data_status or ctx.source.default_data_status
+            if m.STATUS_RANK[status] < m.STATUS_RANK[med.data_status]:
+                # fiche plus fiable déjà présente : aucune présentation ni aucun prix moins fiable n'y est rattaché
+                ctx.warn(f"{brand} {med.dosage_text or ''} : fiche {med.data_status} existante, ligne {status} ignorée", line)
+                ctx.run.rows_rejected += 1
+                continue
             ppv, ppv_status = parse_price(cell(row, mapping, "ppv"))
             ph, _ = parse_price(cell(row, mapping, "ph"))
             pfht, _ = parse_price(cell(row, mapping, "pfht"))

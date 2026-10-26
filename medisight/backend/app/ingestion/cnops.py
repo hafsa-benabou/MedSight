@@ -1,5 +1,8 @@
 """Import du référentiel CNOPS (data.gov.ma, ODbL) : prix 2014 et bases de remboursement.
-Les prix CNOPS ne remplacent jamais un prix AMMPS plus récent (comparaison par date de version)."""
+
+Les prix CNOPS sont historiques : ils sont conservés dans `reimbursements` (ppv_reference_mad, ph_reference_mad,
+valid_as_of) et ne sont jamais recopiés comme prix courant d'une présentation. Ils ne peuvent donc ni écraser un prix
+AMMPS, ni être affichés comme un prix actuel. Seul le code EAN (s'il est valide) enrichit la présentation."""
 from __future__ import annotations
 
 from datetime import date
@@ -34,7 +37,9 @@ def import_cnops_file(db: Session, path: str | Path, *, version_date: date = dat
     if dry_run:
         return {"mapping": mapping, "rows": len(rows), "sample": [r for _, r in rows[:5]]}
     with import_run(db, "cnops_referentiel", file_path=path, version_date=version_date) as ctx:
-        db.execute(delete(m.Reimbursement).where(m.Reimbursement.source_id == ctx.source.id))
+        # idempotence : on remplace uniquement les lignes de la même version du référentiel
+        db.execute(delete(m.Reimbursement).where(m.Reimbursement.source_id == ctx.source.id,
+                                                 m.Reimbursement.valid_as_of == version_date))
         cache = RefCache(db)
         for line, row in rows:
             ctx.run.rows_read += 1
@@ -56,8 +61,9 @@ def import_cnops_file(db: Session, path: str | Path, *, version_date: date = dat
                 method = "created"
             ppv, ppv_status = parse_price(cell(row, mapping, "ppv"))
             ph, _ = parse_price(cell(row, mapping, "ph"))
-            pres, created = upsert_presentation(ctx, med, label=cell(row, mapping, "presentation"), ppv=ppv, ph=ph,
-                                                price_status=ppv_status, price_as_of=version_date,
+            if ppv_status == "unknown" and cell(row, mapping, "ppv") is not None:
+                ctx.warn(f"Prix illisible pour {brand} : {cell(row, mapping, 'ppv')!r}", line)
+            pres, created = upsert_presentation(ctx, med, label=cell(row, mapping, "presentation"),
                                                 ean=cell(row, mapping, "code"))
             base, _ = parse_price(cell(row, mapping, "base"))
             db.add(m.Reimbursement(medicine_id=med.id, presentation_id=pres.id, raw_name=str(brand),
