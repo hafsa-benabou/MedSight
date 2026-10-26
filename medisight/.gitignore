@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+data/raw/*
+!data/raw/.gitkeep
+data/models/
+node_modules/
+.next/
+*.log

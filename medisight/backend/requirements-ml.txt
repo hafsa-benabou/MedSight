@@ -1,0 +1,5 @@
+# Optionnel : backends expérimentaux (non requis par le MVP)
+torch>=2.2
+torchvision>=0.17
+easyocr>=1.7
+pyzbar>=0.1.9

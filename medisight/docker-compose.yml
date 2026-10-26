@@ -1,0 +1,18 @@
+# Lot 1 : base de données. Les services backend et frontend sont ajoutés aux lots suivants.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-medisight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medisight}
+      POSTGRES_DB: ${POSTGRES_DB:-medisight}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medisight}"]
+      interval: 5s
+      retries: 10
+volumes:
+  pgdata:

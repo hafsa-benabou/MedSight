@@ -1,0 +1,11 @@
+# DONNÉES SIMULÉES : pharmacies fictives (noms, adresses, positions approximatives de quartier) pour la démonstration.
+NOM;VILLE;ADRESSE;LATITUDE;LONGITUDE
+Pharmacie Démo Maârif (fictive);Casablanca;Adresse fictive (démo);33.5850;-7.6320
+Pharmacie Démo Anfa (fictive);Casablanca;Adresse fictive (démo);33.5920;-7.6650
+Pharmacie Démo Derb Sultan (fictive);Casablanca;Adresse fictive (démo);33.5700;-7.5900
+Pharmacie Démo Agdal (fictive);Rabat;Adresse fictive (démo);33.9980;-6.8500
+Pharmacie Démo Hay Riad (fictive);Rabat;Adresse fictive (démo);33.9600;-6.8700
+Pharmacie Démo Guéliz (fictive);Marrakech;Adresse fictive (démo);31.6340;-8.0090
+Pharmacie Démo Malabata (fictive);Tanger;Adresse fictive (démo);35.7700;-5.7900
+Pharmacie Démo Atlas (fictive);Fès;Adresse fictive (démo);34.0300;-4.9900
+Pharmacie Démo Talborjt (fictive);Agadir;Adresse fictive (démo);30.4200;-9.5900
