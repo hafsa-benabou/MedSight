@@ -7,6 +7,7 @@ import time
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -17,7 +18,7 @@ from app.core.errors import AppError, error_body
 from app.core.logging import setup_logging
 from app.core.ratelimit import RateLimiter
 from app.db.session import get_db
-from app.services import catalog, pharmacies
+from app.services import catalog, chat, pharmacies
 from app.vision.barcodes import available_readers
 from app.vision.identify import identify_image
 from app.vision.ocr import OcrEngine, default_engine
@@ -65,7 +66,7 @@ def health(db: Session = Depends(get_db)):
     db.execute(text("SELECT 1"))
     counts = {k: v for k, v in db.execute(select(m.Medicine.data_status, func.count()).group_by(m.Medicine.data_status))}
     return {"status": "ok", "version": settings.app_version, "database": "ok", "medicines_by_status": counts,
-            "modules": {"catalog": "ready", "pharmacies": "ready", "chatbot": "lot 2",
+            "modules": {"catalog": "ready", "pharmacies": "ready", "chatbot": {"engine": "rules+sql", "llm": "none"},
                         "pill_identifier": {"ocr": default_engine().status(), "barcode_readers": available_readers()}}}
 
 
@@ -139,3 +140,48 @@ def pills_identify(file: UploadFile = File(..., description="Photo de la boîte 
     max_bytes = int(settings.max_upload_mb * 1024 * 1024)
     data = file.file.read(max_bytes + 1)  # lecture bornée : un fichier énorme n'est jamais chargé en entier
     return identify_image(db, data, settings, engine)
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1000)
+    conversation_id: str | None = Field(None, max_length=64)
+    context_medicine_id: int | None = Field(None, ge=1, description="Identifiant PostgreSQL du médicament (ex. issu du Pill Identifier)")
+
+
+@app.post("/api/chat", tags=["chatbot"])
+def chat_message(body: ChatRequest, db: Session = Depends(get_db)):
+    """Assistant pharmaceutique (français, arabe, darija) : réponse construite à partir de la base, sources citées.
+    Le texte saisi n'est pas conservé ; seule son analyse l'est pendant CONVERSATION_RETENTION_HOURS."""
+    return chat.handle_message(db, settings, body.message.strip() or "?", conversation_id=body.conversation_id,
+                               context_medicine_id=body.context_medicine_id)
+
+
+@app.get("/api/chat/suggestions", tags=["chatbot"])
+def chat_suggestions(medicine_id: int | None = Query(None, ge=1), lang: str = Query("fr", pattern="^(fr|ar)$"),
+                     db: Session = Depends(get_db)):
+    med = None
+    if medicine_id is not None:
+        med = db.get(m.Medicine, medicine_id)
+        if med is None:
+            raise HTTPException(404, "Médicament introuvable")
+    return {"medicine": catalog.medicine_card(catalog_load(db, med.id)) if med else None,
+            "suggestions": chat.suggestions_for(med, lang)}
+
+
+def catalog_load(db: Session, medicine_id: int) -> m.Medicine:
+    return db.scalar(select(m.Medicine).options(*catalog._LOAD).where(m.Medicine.id == medicine_id))
+
+
+@app.delete("/api/chat/{conversation_id}", tags=["chatbot"])
+def chat_delete(conversation_id: str, db: Session = Depends(get_db)):
+    """Efface immédiatement une conversation et son analyse (droit à l'effacement)."""
+    import uuid
+    try:
+        conv = db.get(m.Conversation, uuid.UUID(conversation_id))
+    except ValueError:
+        raise HTTPException(404, "Conversation introuvable") from None
+    if conv is None:
+        raise HTTPException(404, "Conversation introuvable")
+    db.delete(conv)
+    db.commit()
+    return {"deleted": True}

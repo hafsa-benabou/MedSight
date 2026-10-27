@@ -1,10 +1,20 @@
-import ModulePending from "@/components/ModulePending";
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import { Loading } from "@/components/States";
+import Chat from "./Chat";
+
+export const metadata: Metadata = { title: "Assistant pharmaceutique — MEDISIGHT" };
 
 export default function ChatPage() {
-  return <ModulePending title="MediSight AI" lot="lot 2b"
-    intro="L'assistant conversationnel est en cours de développement. Il répondra en français, en arabe et en darija, à partir des seules données sourcées."
-    items={["Comprendre « ch7al taman Doliprane ? », « واش كاين Doliprane 500mg ؟ » ou « Quel est le prix du Doliprane ? » comme la même demande.",
-      "Afficher l'interprétation structurée de chaque message : langue, intention, médicament, dosage, ville.",
-      "Répondre avec la source et la date de chaque donnée, et dire clairement quand une information manque.",
-      "Orienter vers le SAMU (141) ou un professionnel de santé dès qu'une question présente un risque."]} />;
+  return (
+    <div className="mx-auto max-w-page px-5 py-10">
+      <p className="label-wide text-sm text-clinic">Challenge 1 · NLP multilingue + PostgreSQL</p>
+      <h1 className="display mt-2 text-4xl md:text-5xl">Assistant pharmaceutique</h1>
+      <p className="prose-copy mt-3 text-muted">
+        Posez votre question en français, en arabe ou en darija. Les réponses sont construites à partir de la base MEDISIGHT
+        et citent leur source ; une information absente est signalée comme absente.
+      </p>
+      <Suspense fallback={<Loading />}><Chat /></Suspense>
+    </div>
+  );
 }
