@@ -12,11 +12,29 @@ Plateforme d'information pharmaceutique pour le Maroc (ChallengeCamp Data Scienc
 | **1. Données** | Schéma PostgreSQL (22 tables, migrations Alembic), importeurs AMMPS / répertoire des génériques / CNOPS / OpenStreetMap / gardes / RCP / interactions, provenance et statuts, échantillons réels, démo simulée, CLI, tests | **Livré et testé** |
 | **1 bis. Enrichissement (phase 1)** | Révision 0002 (photos, annotations OCR, variantes de noms, conditionnement, marché des sources) ; répertoire vérifié par dosage et forme ; GTIN-14 ; CNOPS historique uniquement ; terminologie BDPM ; contrôle qualité `quality --strict` ; recherche par code-barres | **Livré et testé** (26/10/2026) |
 | 2a. API catalogue | API REST FastAPI : santé, sources, recherche tolérante aux fautes (dosage jamais substitué), fiches, génériques réglementaires vs composition, pharmacies, gardes | **Livré et testé** |
-| 2b. NLP + chatbot | Normalisation darija/arabizi, langue, entités, intentions, chatbot | Prochain lot |
+| **2b. NLP + chatbot** | Langue (fr/ar/darija/arabizi/en), 16 intentions, entités (médicament, substance, dosage, ville), réponses sourcées par gabarits, contexte de conversation, `POST /api/chat` (voir `docs/CHATBOT.md`) | **Livré** ; tests : voir ci-dessous |
 | **3. Pill Identifier V1 (phase 2A)** | Boîtes et emballages : validation des fichiers, qualité d'image, codes-barres EAN-13 / DataMatrix GS1, OCR Tesseract fra+ara+eng, extraction, rapprochement explicable, `POST /api/pills/identify`, corpus et évaluation (voir `docs/PILL_IDENTIFIER.md`). Comprimés isolés et caractéristiques visuelles : à venir | **Livré, testé sans Tesseract** (27/10/2026) ; validation sur photos réelles à faire |
 | 4a. Site web | Next.js 15 + Tailwind : accueil, catalogue avec recherche, fiche médicament (prix sourcés, génériques réglementaires et de composition, informations cliniques), pharmacies et gardes, à propos ; pages Chatbot et Identification décrivant leur état | **Livré et vérifié** |
-| 4b. Site (suite) | Chatbot et identification branchés, sélecteur de langue FR/AR/EN, affichage de droite à gauche (RTL) | À venir |
-| 5. Intégration | Docker Compose complet, scénarios de bout en bout, documentation finale | À venir |
+| **4b. Site (suite)** | Page Pill Identifier interactive (import, glisser-déposer, caméra, résultats expliqués), page Chatbot (historique, sources, cartes, RTL arabe), passage Identifier → Chatbot par identifiant PostgreSQL | **Livré**, `npm run build` OK |
+| 5. Intégration | API conteneurisée avec Tesseract (`docker compose --profile api`), documentation API et scénario de démonstration (`docs/API.md`, `docs/DEMO.md`) | Livré ; validation sur photos réelles à faire |
+
+## Architecture des deux modules
+
+```
+                    ┌──────────────── Next.js 15 (frontend/) ────────────────┐
+                    │  /chat  (Chat.tsx)        /identify  (Identifier.tsx)  │
+                    │      ▲  « Poser une question » : /chat?medicine=<id>   │
+                    └──────┼────────────── /api/* (rewrite) ───────┼─────────┘
+                           │                                       │
+          POST /api/chat   ▼                FastAPI (backend/)     ▼  POST /api/pills/identify
+   app/nlp : text → language → intents → entities         app/vision : images → preprocess → barcodes
+   app/services/chat.py : résolution, contexte, réponses             → ocr (Tesseract) → extraction → matching
+                           │                                       │
+                           └──────────► PostgreSQL 16 ◄────────────┘
+              medicines, presentations (PPV, EAN-13), ingredients, generic_groups, clinical_sections,
+              pharmacies, conversations / messages (analyse seule, 72 h), identification_results (empreinte, 24 h)
+```
+Le contexte transmis du Pill Identifier au chatbot est l'identifiant `medicines.id`, revérifié par l'API.
 
 ## Démarrage (lot 1)
 ```bash
@@ -91,6 +109,9 @@ Site (25/10/2026) : `next build` sans erreur (9 routes) ; les 8 pages répondent
 - Pas de collecte automatisée du site AMMPS (« tous droits réservés ») sans autorisation : import d'exports ou saisie manuelle.
 
 ## Documentation
+- `docs/CHATBOT.md` : pipeline NLP, intentions, règles de sécurité.
+- `docs/API.md` : référence des endpoints.
+- `docs/DEMO.md` : scénario de démonstration et limites à annoncer.
 - `docs/DATA_SOURCES.md` — sources vérifiées, licences, limites
 - `docs/DATA_PIPELINE.md` — principes, commandes, modèle, résultats du chargement
 - `data/README.md` — organisation des fichiers de données
