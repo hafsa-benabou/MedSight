@@ -13,7 +13,7 @@ Plateforme d'information pharmaceutique pour le Maroc (ChallengeCamp Data Scienc
 | **1 bis. Enrichissement (phase 1)** | Révision 0002 (photos, annotations OCR, variantes de noms, conditionnement, marché des sources) ; répertoire vérifié par dosage et forme ; GTIN-14 ; CNOPS historique uniquement ; terminologie BDPM ; contrôle qualité `quality --strict` ; recherche par code-barres | **Livré et testé** (26/10/2026) |
 | 2a. API catalogue | API REST FastAPI : santé, sources, recherche tolérante aux fautes (dosage jamais substitué), fiches, génériques réglementaires vs composition, pharmacies, gardes | **Livré et testé** |
 | 2b. NLP + chatbot | Normalisation darija/arabizi, langue, entités, intentions, chatbot | Prochain lot |
-| 3. Pill Identifier | Qualité d'image, code-barres EAN-13, OCR Tesseract, caractéristiques visuelles, fusion des indices | À venir |
+| **3. Pill Identifier V1 (phase 2A)** | Boîtes et emballages : validation des fichiers, qualité d'image, codes-barres EAN-13 / DataMatrix GS1, OCR Tesseract fra+ara+eng, extraction, rapprochement explicable, `POST /api/pills/identify`, corpus et évaluation (voir `docs/PILL_IDENTIFIER.md`). Comprimés isolés et caractéristiques visuelles : à venir | **Livré, testé sans Tesseract** (27/10/2026) ; validation sur photos réelles à faire |
 | 4a. Site web | Next.js 15 + Tailwind : accueil, catalogue avec recherche, fiche médicament (prix sourcés, génériques réglementaires et de composition, informations cliniques), pharmacies et gardes, à propos ; pages Chatbot et Identification décrivant leur état | **Livré et vérifié** |
 | 4b. Site (suite) | Chatbot et identification branchés, sélecteur de langue FR/AR/EN, affichage de droite à gauche (RTL) | À venir |
 | 5. Intégration | Docker Compose complet, scénarios de bout en bout, documentation finale | À venir |
@@ -52,7 +52,16 @@ uvicorn app.main:app --reload --port 8000
 ```
 Puis ouvrir http://localhost:8000/docs (documentation interactive Swagger) — par exemple `GET /api/medicines/search?q=dolipran 500mg`.
 
-## Tests réellement exécutés (26/10/2026, phase 1, PostgreSQL 16.15, Python 3.11.9)
+## Tests réellement exécutés (27/10/2026, phase 2A, PostgreSQL 16, Python 3.11.9)
+`65 passed, 6 skipped` : 34 tests des lots précédents + 31 dans `tests/test_vision.py` (images synthétiques, OCR simulé).
+Les 6 tests de `tests/test_vision_tesseract.py` sont ignorés : Tesseract n'est pas installé sur le poste de test.
+Également vérifiés par l'API (TestClient, base `medisight_test`) : route `POST /api/pills/identify` dans OpenAPI, `GET /api/health`
+(OCR indisponible signalé, lecteurs `zxing-cpp` et `opencv`), erreurs 415 / 413 (`file_too_large`, `image_too_large`) / 422
+(`empty_file`, `corrupted_image`, champ manquant), code-barres AMLOR 5 mg réellement décodé → `identified` fiabilité `medium` avec
+avertissement, texte sans OCR → `ocr_unavailable`, EAN valide hors catalogue → `not_found`, aucune image stockée.
+Non exécutés : OCR réel (Tesseract absent), photos réelles d'emballages (corpus à constituer).
+
+## Tests exécutés précédemment (26/10/2026, phase 1, PostgreSQL 16.15, Python 3.11.9)
 `34 passed` (20 tests existants, dont 3 adaptés aux nouvelles règles, + 14 nouveaux dans `tests/test_data_quality.py`) : découpage
 des libellés du répertoire ancré sur le groupe (FUSIDATE PHARMA 5 2 %), équivalence de dosages sans confusion (concentration ≠ dose,
 « 0,02 » = « 2 % »), membres de dosage ou de forme différents non rattachés, GTIN-14, conditionnement non deviné, ligne simulée

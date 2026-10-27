@@ -55,8 +55,14 @@ class Settings(BaseSettings):
     medbase_base_url: str = "https://api.medbase.ma/api/v1"
 
     simulated_stock_enabled: bool = True
-    ocr_engine: str = "tesseract"  # tesseract | easyocr | none
-    tesseract_langs: str = "fra+eng"
+    ocr_engine: str = "tesseract"  # tesseract | none
+    tesseract_langs: str = "fra+ara+eng"
+    tesseract_cmd: str | None = None  # chemin de tesseract.exe s'il n'est pas dans le PATH (Windows)
+    ocr_timeout_seconds: float = 30.0
+    ocr_max_passes: int = 6  # nombre maximal de passages OCR (variantes d'image, rotations) par photo
+    max_image_side: int = 2400  # côté maximal après réduction (mémoire et temps OCR)
+    min_image_side: int = 320  # en dessous : résolution insuffisante
+    pill_include_simulated: bool = False  # démo uniquement : candidats simulés, toujours signalés comme tels
 
     emergency_samu: str = "141"
     emergency_civil_protection: str = "15"

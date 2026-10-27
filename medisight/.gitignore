@@ -9,3 +9,5 @@ data/models/
 node_modules/
 .next/
 *.log
+data/corpus/*
+!data/corpus/README.md

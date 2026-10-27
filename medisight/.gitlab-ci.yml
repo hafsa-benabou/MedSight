@@ -12,6 +12,8 @@ backend-tests:
     POSTGRES_DB: medisight
     TEST_DATABASE_BASE: postgresql+psycopg://medisight:medisight@postgres:5432
   before_script:
+    # Tesseract + modèles fra/ara/eng : les tests d'intégration OCR (test_vision_tesseract.py) sont exécutés
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends tesseract-ocr tesseract-ocr-fra tesseract-ocr-ara tesseract-ocr-eng fonts-dejavu-core fonts-noto-core libraqm0 libglib2.0-0 > /dev/null
     - pip install -q -r backend/requirements-dev.txt
   script:
     - cd backend && python -m pytest -q

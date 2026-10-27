@@ -63,6 +63,9 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser("import-aliases", help="Variantes de noms commerciaux sourcées (CSV modèle)"); s.add_argument("file")
     s = sub.add_parser("quality", help="Contrôle qualité de la base"); s.add_argument("--strict", action="store_true",
                                                                                help="code de sortie 1 si contrôle critique")
+    s = sub.add_parser("identify", help="Analyse une photo de boîte (pipeline réel, sans trace)"); s.add_argument("file")
+    s = sub.add_parser("import-corpus", help="Corpus de photos (manifeste CSV)"); s.add_argument("manifest")
+    sub.add_parser("evaluate-identifier", help="Mesure le Pill Identifier sur le corpus importé")
     for name in ("purge-simulated", "purge-expired", "stats", "reindex-search"):
         sub.add_parser(name)
     a = p.parse_args(argv)
@@ -116,6 +119,17 @@ def main(argv: list[str] | None = None) -> None:
                 refresh_search_text(med)
             db.commit()
             result = {"reindexed": len(meds)}
+        elif a.cmd == "identify":
+            from app.vision.identify import identify_image
+            from app.vision.ocr import default_engine
+            result = identify_image(db, Path(a.file).read_bytes(), get_settings(), default_engine(), persist=False)
+        elif a.cmd == "import-corpus":
+            from app.vision.corpus import import_corpus
+            result = import_corpus(db, a.manifest, get_settings())
+        elif a.cmd == "evaluate-identifier":
+            from app.vision.corpus import evaluate
+            from app.vision.ocr import default_engine
+            result = evaluate(db, get_settings(), default_engine())
         elif a.cmd == "purge-simulated":
             from app.ingestion.seed import purge_simulated
             result = purge_simulated(db)

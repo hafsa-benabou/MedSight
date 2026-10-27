@@ -85,6 +85,11 @@ SOURCES: dict[str, dict[str, Any]] = {
         name="Variantes de noms commerciaux — saisie sourcée", publisher="Équipe MEDISIGHT", license="Selon la référence citée",
         reuse_conditions="Chaque variante cite sa référence (photo d'emballage, notice, RCP).", is_official=False,
         default_data_status="unverified", market="MA"),
+    "pill_corpus": dict(
+        name="Corpus de photos de boîtes MEDISIGHT", publisher="Équipe MEDISIGHT", license="Licence indiquée par photo",
+        reuse_conditions="Photos prises par l'équipe ou autorisées ; licence et auteur obligatoires pour chaque photo.",
+        is_official=False, default_data_status="unverified", market="MA",
+        notes="Références visuelles du Pill Identifier, rattachées à des présentations marocaines existantes."),
     "demo_simulated": dict(
         name="Jeu de démonstration MEDISIGHT (simulé)", publisher="Équipe MEDISIGHT", license="Données fictives",
         reuse_conditions="Ne jamais présenter comme des données réelles.", is_official=False,
@@ -415,7 +420,7 @@ def norm_princeps(raw: Any) -> str | None:
 
 
 _PACK_CONTAINERS = r"BOITES?|BOÎTES?|ETUIS?|ÉTUIS?|FLACONS?|TUBES?|POTS?|PLAQUETTES?|SACHETS?|AMPOULES?|FLACON MONO ?DOSE"
-_PACK_UNITS = {"g": "g", "gr": "g", "mg": "mg", "ml": "ml", "l": "l", "comprimes": "comprime", "comprime": "comprime", "cp": "comprime",
+PACK_UNITS = {"g": "g", "gr": "g", "mg": "mg", "ml": "ml", "l": "l", "comprimes": "comprime", "comprime": "comprime", "cp": "comprime",
                "gelules": "gelule", "gelule": "gelule", "sachets": "sachet", "sachet": "sachet", "ampoules": "ampoule",
                "ampoule": "ampoule", "doses": "dose", "dose": "dose", "suppositoires": "suppositoire",
                "capsules": "capsule", "flacons": "flacon", "stylos": "stylo", "seringues": "seringue"}
@@ -432,9 +437,9 @@ def parse_pack(label: str | None) -> tuple[Decimal | None, str | None]:
     if not match:
         return None, None
     unit_raw = normalize_text(match.group(2) or "")
-    if unit_raw and unit_raw not in _PACK_UNITS:
+    if unit_raw and unit_raw not in PACK_UNITS:
         return None, None
-    return Decimal(match.group(1).replace(",", ".")), _PACK_UNITS.get(unit_raw)
+    return Decimal(match.group(1).replace(",", ".")), PACK_UNITS.get(unit_raw)
 
 
 def medicine_key(brand: str, dosage: str | None, form: str | None) -> str:

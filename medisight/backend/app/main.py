@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import time
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, select, text
@@ -18,6 +18,9 @@ from app.core.logging import setup_logging
 from app.core.ratelimit import RateLimiter
 from app.db.session import get_db
 from app.services import catalog, pharmacies
+from app.vision.barcodes import available_readers
+from app.vision.identify import identify_image
+from app.vision.ocr import OcrEngine, default_engine
 
 settings = get_settings()
 setup_logging(settings.log_level)
@@ -62,7 +65,8 @@ def health(db: Session = Depends(get_db)):
     db.execute(text("SELECT 1"))
     counts = {k: v for k, v in db.execute(select(m.Medicine.data_status, func.count()).group_by(m.Medicine.data_status))}
     return {"status": "ok", "version": settings.app_version, "database": "ok", "medicines_by_status": counts,
-            "modules": {"catalog": "ready", "pharmacies": "ready", "chatbot": "lot 2", "pill_identifier": "lot 3"}}
+            "modules": {"catalog": "ready", "pharmacies": "ready", "chatbot": "lot 2",
+                        "pill_identifier": {"ocr": default_engine().status(), "barcode_readers": available_readers()}}}
 
 
 @app.get("/api/sources", tags=["système"])
@@ -121,3 +125,17 @@ def pharmacies_search(city: str | None = Query(None, max_length=80), q: str | No
 @app.get("/api/pharmacies/on-duty", tags=["pharmacies"])
 def pharmacies_on_duty(city: str | None = Query(None, max_length=80), db: Session = Depends(get_db)):
     return pharmacies.on_duty(db, city)
+
+
+def get_ocr_engine() -> OcrEngine:
+    return default_engine()
+
+
+@app.post("/api/pills/identify", tags=["pill identifier"])
+def pills_identify(file: UploadFile = File(..., description="Photo de la boîte (JPEG, PNG ou WEBP)"),
+                   db: Session = Depends(get_db), engine: OcrEngine = Depends(get_ocr_engine)):
+    """Analyse une photo de boîte : code-barres, OCR, extraction, rapprochement avec le catalogue marocain.
+    L'image n'est pas conservée (STORE_UPLOADED_IMAGES=false) et ne quitte pas le serveur."""
+    max_bytes = int(settings.max_upload_mb * 1024 * 1024)
+    data = file.file.read(max_bytes + 1)  # lecture bornée : un fichier énorme n'est jamais chargé en entier
+    return identify_image(db, data, settings, engine)
