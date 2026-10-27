@@ -88,6 +88,16 @@ Le total, borné à 0-100, sert à **classer et expliquer**. Ce n'est ni une pro
 4. Dépendances Python : `python -m pip install -r requirements-dev.txt` (ajoute `zxing-cpp`, sans dépendance système).
 5. `GET /api/health` → `modules.pill_identifier.ocr.available` doit valoir `true`.
 
+### Alternative sans droits administrateur : Docker
+L'image `backend/Dockerfile` contient Tesseract 5 et les modèles `fra`, `ara`, `eng` (paquets Debian) :
+```powershell
+docker compose up -d db
+docker compose --profile api build api
+docker compose --profile api up -d api                        # API avec OCR sur http://localhost:8000
+docker compose --profile api run --rm api python -m pytest -q  # suite complète, tests Tesseract compris
+```
+Arrêter auparavant l'API lancée avec `uvicorn` sur le port 8000. Prévoir environ 2 Go d'espace disque pour l'image.
+
 ## Corpus de référence (photos réelles)
 ### Structure
 Photos et manifeste dans `data/corpus/` (non versionnés par défaut : vérifier les droits avant toute publication).

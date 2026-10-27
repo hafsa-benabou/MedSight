@@ -55,3 +55,62 @@ export async function api<T>(path: string, signal?: AbortSignal): Promise<T> {
   }
   return res.json() as Promise<T>;
 }
+
+async function send<T>(path: string, init: RequestInit): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(path, { ...init, headers: { Accept: "application/json", ...(init.headers ?? {}) } });
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    throw new ApiError(0, DOWN);
+  }
+  if (!res.ok) {
+    let message = `Erreur ${res.status}`;
+    try {
+      const body = await res.json();
+      message = body?.error?.message ?? (typeof body?.detail === "string" ? body.detail : message);
+    } catch {
+      if (res.status >= 500) message = DOWN;
+    }
+    if (res.status === 429) message = "Trop de requêtes : patientez une minute avant de réessayer.";
+    throw new ApiError(res.status, message);
+  }
+  return res.json() as Promise<T>;
+}
+
+export function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  return send<T>(path, { method: "POST", body: JSON.stringify(body), signal, headers: { "Content-Type": "application/json" } });
+}
+
+export function postFile<T>(path: string, file: Blob, name: string, signal?: AbortSignal): Promise<T> {
+  const form = new FormData();
+  form.append("file", file, name);
+  return send<T>(path, { method: "POST", body: form, signal });
+}
+
+// --- Pill Identifier (POST /api/pills/identify) ---
+export type IdentifyStatus = "identified" | "ambiguous" | "contradictory" | "not_found" | "unreadable" | "ocr_unavailable";
+export type Evidence = { barcode: string; brand_similarity: number; dosage: string; substance: string; form: string; pack: string };
+export type PillCandidate = { rank: number; score: number; medicine_id: number; presentation_id: number; brand: string;
+  dosage: string | null; form: string | null; presentation: string; ean13: string | null; ppv: number | null;
+  price_as_of: string | null; ingredients: { name: string; strength: string | null }[]; laboratory: string | null;
+  data_status: string; source: SourceRef; medicine_source: SourceRef; evidence: Evidence; found_by: string[]; explanation: string[] };
+export type IdentifyResponse = { identification_id: string | null; status: IdentifyStatus; message: string; reliability: string;
+  identified_level: string | null; score_note: string; reasons: string[]; warnings: string[];
+  barcodes: { code: string | null; format: string; status: string; reader: string; in_catalog: boolean; expiry?: string; lot?: string }[];
+  extracted: { brand_segments: string[]; dosage_text: string | null; doses: { text: string }[]; substances: { name: string }[];
+    form: string | null; pack_text: string | null; laboratory: string | null };
+  candidates: PillCandidate[]; available_dosages: string[];
+  ocr: { engine: string | null; available: boolean; languages: string | null; version: string | null; variant: string | null;
+    rotation: number; mean_confidence: number | null; lines: { text: string; confidence: number }[] };
+  quality: { usable: boolean; issues: string[]; [k: string]: unknown }; timings_ms: Record<string, number>; disclaimer: string };
+
+// --- Chatbot (POST /api/chat) ---
+export type ChatSource = { code: string; name: string; url: string | null; license: string | null; data_status: string };
+export type ChatResponse = { conversation_id: string; message: string;
+  language: { code: string; script: string; reply_language: "fr" | "ar"; confidence: number };
+  intent: { name: string; resolved: string; confidence: number; matched: string[] };
+  entities: { medicines: { text: string; brand: string; score: number; method: string }[];
+    ingredients: { text: string; name: string }[]; dose: { text: string; value: number; unit: string | null } | null; city: string | null };
+  understanding: string; medicines: MedicineCard[]; pharmacies: Pharmacy[]; sources: ChatSource[]; warnings: string[];
+  context_medicine: MedicineCard | null; suggestions: string[]; contains_simulated_data: boolean; generation: string; disclaimer: string };

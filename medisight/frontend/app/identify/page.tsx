@@ -1,10 +1,18 @@
-import ModulePending from "@/components/ModulePending";
+import type { Metadata } from "next";
+import Identifier from "./Identifier";
+
+export const metadata: Metadata = { title: "Pill Identifier — MEDISIGHT" };
 
 export default function IdentifyPage() {
-  return <ModulePending title="Pill Identifier" lot="lot 3"
-    intro="L'identification par photo est en cours de développement. Elle proposera des correspondances possibles, jamais une confirmation."
-    items={["Lire le code-barres EAN-13 de la boîte et le rapprocher du Répertoire AMMPS.",
-      "Lire le nom et le dosage imprimés (OCR) et contrôler la netteté de la photo.",
-      "Classer les trois correspondances les plus probables, avec un score non calibré et sa justification.",
-      "Afficher « Identification non fiable » quand les indices sont insuffisants, et ne pas conserver la photo."]} />;
+  return (
+    <div className="mx-auto max-w-page px-5 py-12">
+      <p className="label-wide text-sm text-clinic">Challenge 2 · Vision par ordinateur + OCR + PostgreSQL</p>
+      <h1 className="display mt-2 text-4xl md:text-5xl">Pill Identifier</h1>
+      <p className="prose-copy mt-4 text-lg text-muted">
+        Photographiez la face d&apos;une boîte portant le nom, le dosage ou le code-barres. MEDISIGHT lit le code-barres et le texte imprimé,
+        puis rapproche ces indices du catalogue marocain. Le résultat est une hypothèse, à faire confirmer par un pharmacien.
+      </p>
+      <Identifier />
+    </div>
+  );
 }

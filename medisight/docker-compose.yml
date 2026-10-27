@@ -1,4 +1,4 @@
-# Lot 1 : base de données. Les services backend et frontend sont ajoutés aux lots suivants.
+# Base PostgreSQL (toujours) ; API conteneurisée avec Tesseract en option (profil « api »).
 services:
   db:
     image: postgres:16-alpine
@@ -14,5 +14,16 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medisight}"]
       interval: 5s
       retries: 10
+  # API avec Tesseract (fra+ara+eng) : `docker compose --profile api up -d api` (port 8000).
+  # Tests OCR réels : `docker compose --profile api run --rm api python -m pytest -q`
+  api:
+    profiles: ["api"]
+    build: { context: ., dockerfile: backend/Dockerfile }
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medisight}:${POSTGRES_PASSWORD:-medisight}@db:5432/${POSTGRES_DB:-medisight}
+      TEST_DATABASE_BASE: postgresql+psycopg://${POSTGRES_USER:-medisight}:${POSTGRES_PASSWORD:-medisight}@db:5432
+      CORS_ORIGINS: '["http://localhost:3000"]'
+    ports: ["8000:8000"]
+    depends_on: { db: { condition: service_healthy } }
 volumes:
   pgdata:

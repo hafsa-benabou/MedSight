@@ -11,3 +11,5 @@ node_modules/
 *.log
 data/corpus/*
 !data/corpus/README.md
+*.dump
+*.tsbuildinfo
