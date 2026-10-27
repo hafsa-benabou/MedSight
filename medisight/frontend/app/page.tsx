@@ -3,7 +3,7 @@ import HeroDemo from "@/components/HeroDemo";
 import SourcesList from "@/components/SourcesList";
 
 const STEPS = [
-  ["Vous demandez", "En français, en arabe ou en darija, à l'écrit, ou bientôt en photographiant une boîte."],
+  ["Vous demandez", "En français, en arabe ou en darija, à l'écrit, ou en photographiant une boîte."],
   ["MEDISIGHT interprète", "Langue, intention, médicament, dosage et ville sont extraits, puis cherchés dans des données sourcées."],
   ["Vous vérifiez", "Chaque réponse indique sa source et sa date. Un pharmacien confirme avant toute prise."],
 ];
@@ -22,7 +22,7 @@ export default function Home() {
             <Link href="/identify" className="rounded-lg border border-ink/25 bg-white px-5 py-3 font-semibold hover:border-ink">Identify a Pill</Link>
           </div>
           <p className="mt-6 text-sm text-muted">
-            Disponible aujourd&apos;hui : <Link href="/medicines" className="font-semibold text-clinic underline underline-offset-4">le catalogue des médicaments</Link>, avec prix et génériques sourcés.
+            Les deux modules partagent <Link href="/medicines" className="font-semibold text-clinic underline underline-offset-4">le catalogue des médicaments</Link> : prix, génériques et sources.
           </p>
         </div>
         <HeroDemo />
@@ -40,7 +40,7 @@ export default function Home() {
             </dl>
             <div className="mt-8 flex flex-wrap gap-3 text-sm">
               <Link href="/medicines" className="rounded-lg bg-clinic px-4 py-2.5 font-semibold text-white">Explorer les médicaments</Link>
-              <Link href="/chat" className="rounded-lg border border-ink/20 px-4 py-2.5 font-semibold">Voir l&apos;avancement du chatbot</Link>
+              <Link href="/chat" className="rounded-lg border border-ink/20 px-4 py-2.5 font-semibold">Ouvrir le chatbot</Link>
             </div>
           </article>
           <article className="relative bg-white px-5 py-12 md:px-10">
@@ -52,8 +52,9 @@ export default function Home() {
             </div>
             <h2 className="display text-2xl">AI Pill Identifier</h2>
             <p className="prose-copy mt-3 text-muted">Photographiez une boîte : le code-barres EAN-13 et le texte imprimé sont rapprochés du Répertoire AMMPS. Le résultat reste une hypothèse à faire confirmer.</p>
-            <p className="mt-6 text-sm"><span className="font-semibold">État :</span> <span className="text-muted">module en développement.</span></p>
-            <Link href="/identify" className="mt-8 inline-block rounded-lg border border-ink/20 px-4 py-2.5 text-sm font-semibold">Identify a Pill</Link>
+            <p className="mt-6 text-sm"><span className="font-semibold">Chaîne d&apos;analyse :</span> <span className="text-muted">contrôle qualité, code-barres (zxing-cpp), OCR Tesseract fra+ara+eng, extraction du nom et du dosage, rapprochement PostgreSQL expliqué indice par indice.</span></p>
+            <p className="mt-2 text-sm text-muted">Depuis un résultat, « Poser une question » ouvre le chatbot sur ce médicament.</p>
+            <Link href="/identify" className="mt-8 inline-block rounded-lg bg-health px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#13866F]">Identifier une boîte</Link>
           </article>
         </div>
       </section>

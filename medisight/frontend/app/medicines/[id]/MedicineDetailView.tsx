@@ -42,7 +42,10 @@ export default function MedicineDetailView({ id }: { id: string }) {
             <p className="mt-1 text-sm"><span className="font-semibold">Statut de commercialisation : </span>{med.marketing_status ?? "non renseigné"}
               {med.princeps_status ? <span className="text-muted">, {TYPE[med.princeps_status] ?? med.princeps_status}</span> : null}</p>
           </div>
-          <div className="md:text-right"><SourceStamp status={med.data_status} source={med.source} /></div>
+          <div className="flex flex-col gap-3 md:items-end md:text-right">
+            <SourceStamp status={med.data_status} source={med.source} />
+            <Link href={`/chat?medicine=${med.id}`} className="inline-block rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-[#0d2f4b]">Poser une question</Link>
+          </div>
         </div>
         {med.data_status === "simulated" && (
           <div className="border-t border-sim/30 bg-sim-soft px-6 py-3 text-sm text-[#6B3E00]">Fiche de démonstration : nom et composition réels, prix et présentations fictifs.</div>

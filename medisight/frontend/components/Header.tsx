@@ -5,7 +5,7 @@ import Logo from "./Logo";
 
 const NAV: [string, string][] = [
   ["/", "Accueil"], ["/chat", "AI Chatbot"], ["/identify", "Pill Identifier"],
-  ["/medicines", "Explorer les médicaments"], ["/about", "À propos"],
+  ["/medicines", "Catalogue"], ["/pharmacies", "Pharmacies"], ["/about", "À propos"],
 ];
 
 export default function Header() {
