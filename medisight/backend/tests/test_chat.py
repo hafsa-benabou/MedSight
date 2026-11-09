@@ -32,6 +32,64 @@ def test_darija_price_uses_database_and_flags_simulation(client):
     assert any("SIMULÉES" in w for w in out["warnings"])
 
 
+def test_darija_question_gets_a_darija_answer_when_templates_exist(client):
+    out = ask(client, "Ch7al taman dyal AMLOR 5 mg ?")
+    assert out["language"]["code"] == "darija_latin" and out["language"]["reply_language"] == "darija"
+    assert "ma kaynch" in out["message"] and "AMLOR 5 MG" in out["message"] and "DH" not in out["message"]
+    assert not any("rédigée en français" in w for w in out["warnings"])
+    gen = ask(client, "Chnahuma les génériques dyal AMLOR 10 mg ?")
+    assert gen["language"]["code"] == "darija_latin" and gen["intent"]["resolved"] == "generics"
+    assert "AMEP 10 MG" in gen["message"] and "AMLOR 5" not in gen["message"]
+
+
+def test_darija_falls_back_to_plain_french_rather_than_mixing(client):
+    out = ask(client, "Ch7al taman dyal Doliprane 500mg ?")  # prix (fictif) : formulation darija non disponible
+    assert out["language"]["reply_language"] == "fr" and "Prix publics" in out["message"]
+    assert any("rédigée en français" in w for w in out["warnings"])
+
+
+def test_on_duty_without_verified_data_never_points_to_141(client):
+    for q in ("Quelles sont les pharmacies de garde à Casablanca aujourd'hui ?", "wach kayn pharmacie de garde f casa ?"):
+        out = ask(client, q)
+        assert out["intent"]["resolved"] == "on_duty" and "141" not in out["message"]
+        if out["understanding"] == "information_unavailable":
+            assert out["pharmacies"] == []
+
+
+def test_exact_brand_wins_and_ties_are_reported_not_substituted(client):
+    exact = ask(client, "Quelle est la substance active d'AMLOR 5 mg ?")
+    assert [(x["brand"], x["dosage"]) for x in exact["medicines"]] == [("AMLOR", "5 MG")]
+    amb = ask(client, "Prix d'amlo 5 mg")  # « amlo » : AMLOR et AMILO à égalité
+    assert amb["understanding"] == "ambiguous" and "AMLOR" in amb["message"] and "AMILO" in amb["message"]
+    assert amb["context_medicine"] is None
+
+
+def test_explicit_dose_overrides_context_dose(client):
+    first = ask(client, "Quelle est la substance active d'AMLOR 5 mg ?")
+    conv = first["conversation_id"]
+    ten = ask(client, "prix du 10 mg ?", conversation_id=conv)
+    assert [(x["brand"], x["dosage"]) for x in ten["medicines"]] == [("AMLOR", "10 MG")]
+    twenty = ask(client, "prix du 20 mg ?", conversation_id=conv)
+    assert twenty["understanding"] == "dosage_not_found" and "DH" not in twenty["message"]
+
+
+def test_conversation_contexts_are_isolated(client):
+    a = ask(client, "Quels sont les génériques d'AMLOR 10 mg ?")
+    b = ask(client, "Quelle est la substance active d'AMLOR 5 mg ?")
+    assert a["context_medicine"]["dosage"] == "10 MG" and b["context_medicine"]["dosage"] == "5 MG"
+    fa = ask(client, "et ses présentations ?", conversation_id=a["conversation_id"])
+    fb = ask(client, "et ses présentations ?", conversation_id=b["conversation_id"])
+    assert fa["medicines"][0]["id"] == a["context_medicine"]["id"] != fb["medicines"][0]["id"] == b["context_medicine"]["id"]
+    # reprise par un possessif : jamais une suggestion approximative du catalogue à la place du contexte
+    for q in ("et son prix ?", "et sa composition ?", "ch7al taman dyalo ?"):
+        follow = ask(client, q, conversation_id=b["conversation_id"])
+        assert [x["id"] for x in follow["medicines"]] == [b["context_medicine"]["id"]], q
+    fresh = ask(client, "Quelle est sa substance active ?")  # nouvelle conversation : aucun contexte hérité
+    assert fresh["context_medicine"] is None and fresh["understanding"] == "clarification_needed"
+    # une question portant sur plusieurs dosages ne fixe pas un dosage arbitraire comme contexte
+    assert ask(client, "Quels sont les dosages disponibles pour AMLOR ?")["context_medicine"] is None
+
+
 def test_missing_dosage_is_never_substituted(client):
     out = ask(client, "prix doliprane 750 mg")
     assert out["understanding"] == "dosage_not_found"

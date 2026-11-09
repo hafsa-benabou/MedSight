@@ -93,6 +93,10 @@ def _find_terms(text: str, lines: list[str], terms: dict[str, tuple[int, str]]) 
         if iid in found or len(term) < 7:
             continue
         for line in lines:
+            # partial_ratio aligne la chaîne la plus courte dans la plus longue : sans ce garde-fou, un fragment OCR
+            # de 1-2 caractères (« de », « 1 ») serait « trouvé » à 100 % dans « acetylsalicylate de lysine »
+            if len(line) < 0.8 * len(term):
+                continue
             if fuzz.partial_ratio(term, line) >= 92 and abs(len(line) - len(term)) <= max(12, len(term)):
                 found[iid] = {"id": iid, "name": name, "matched": term, "method": "fuzzy"}
                 break

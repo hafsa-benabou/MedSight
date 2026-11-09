@@ -1,12 +1,11 @@
 import Link from "next/link";
-import SourcesList from "@/components/SourcesList";
 import { Stamp } from "@/components/Stamp";
 
 const STATUSES: [string, string][] = [
   ["official", "Donnée d'une autorité publique (AMMPS, CNOPS), avec sa date de version."],
   ["reference", "Source scientifique tierce reconnue (ex. DDInter pour les interactions)."],
   ["unverified", "Donnée non vérifiée (ex. OpenStreetMap, liste de garde saisie)."],
-  ["simulated", "Donnée fictive de démonstration, supprimable en une commande."],
+  ["simulated", "Donnée fictive réservée au développement et aux tests ; jamais affichée dans l'interface publique."],
 ];
 
 const CHALLENGES: [string, string, string[], string][] = [
@@ -50,6 +49,7 @@ export default function AboutPage() {
           <p className="prose-copy mt-3">MEDISIGHT n&apos;établit pas de diagnostic et ne remplace pas un pharmacien ou un médecin. En cas d&apos;urgence : SAMU 141 ou Protection civile 15.</p>
           <h2 className="display mt-10 text-2xl">Confidentialité</h2>
           <p className="prose-copy mt-3">Les photos ne sont pas conservées par défaut. Les conversations ont une durée de conservation limitée. Aucune donnée n&apos;est transmise à un service d&apos;IA externe sans consentement explicite.</p>
+          <p className="prose-copy mt-3">Historique du chatbot : désactivé par défaut. Si vous l&apos;activez, vos conversations sont enregistrées dans votre navigateur, sur cet appareil uniquement, 30 jours au plus. Elles ne sont ni synchronisées entre appareils ni envoyées à un service externe, et vous pouvez les effacer à tout moment.</p>
         </div>
         <div>
           <h2 className="display text-2xl">Statuts des données</h2>
@@ -59,8 +59,8 @@ export default function AboutPage() {
         </div>
       </section>
       <section id="sources" className="mt-14">
-        <h2 className="display text-2xl">Sources chargées</h2>
-        <div className="mt-4"><SourcesList /></div>
+        <h2 className="display text-2xl">Sources</h2>
+        <p className="prose-copy mt-3">Les informations pharmaceutiques de MedSight proviennent d&apos;un catalogue de référence documenté, dont la couverture est actuellement partielle. La provenance des informations est indiquée dans les fiches des médicaments.</p>
       </section>
     </div>
   );

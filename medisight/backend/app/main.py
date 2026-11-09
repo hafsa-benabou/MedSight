@@ -64,8 +64,10 @@ async def db_down(_: Request, exc: OperationalError):
 @app.get("/api/health", tags=["système"])
 def health(db: Session = Depends(get_db)):
     db.execute(text("SELECT 1"))
-    counts = {k: v for k, v in db.execute(select(m.Medicine.data_status, func.count()).group_by(m.Medicine.data_status))}
+    counts = {k: v for k, v in db.execute(select(m.Medicine.data_status, func.count()).group_by(m.Medicine.data_status),
+                                          execution_options={"include_simulated": True})}
     return {"status": "ok", "version": settings.app_version, "database": "ok", "medicines_by_status": counts,
+            "simulated_data_exposed": settings.show_simulated_data,
             "modules": {"catalog": "ready", "pharmacies": "ready", "chatbot": {"engine": "rules+sql", "llm": "none"},
                         "pill_identifier": {"ocr": default_engine().status(), "barcode_readers": available_readers()}}}
 
@@ -73,7 +75,10 @@ def health(db: Session = Depends(get_db)):
 @app.get("/api/sources", tags=["système"])
 def sources(db: Session = Depends(get_db)):
     out = []
-    for s in db.scalars(select(m.DataSource).order_by(m.DataSource.is_official.desc(), m.DataSource.name)):
+    stmt = select(m.DataSource).order_by(m.DataSource.is_official.desc(), m.DataSource.name)
+    if not settings.show_simulated_data:
+        stmt = stmt.where(m.DataSource.default_data_status != "simulated")
+    for s in db.scalars(stmt):
         last = db.scalar(select(m.DataImport).where(m.DataImport.source_id == s.id, m.DataImport.status.in_(["success", "partial"]))
                          .order_by(m.DataImport.finished_at.desc()).limit(1))
         out.append({"code": s.code, "name": s.name, "publisher": s.publisher, "url": s.url, "license": s.license,

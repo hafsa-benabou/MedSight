@@ -36,6 +36,20 @@ MESSAGES = {
 }
 
 
+def verdict(status: str, level: str | None, reliability: str, top: dict | None) -> str:
+    """Lecture prudente du résultat, fondée sur la nature des indices et non sur l'indice numérique :
+    - confirmed : une présentation précise, étayée par des indices indépendants (code-barres corroboré, ou nom +
+      dosage + forme/conditionnement/substance), sans contradiction ni laboratoire divergent ;
+    - partial : médicament candidat reconnu mais présentation non confirmée, ou plusieurs candidats possibles ;
+    - failed : contradiction déterminante, aucune correspondance, photo ou OCR inexploitable."""
+    if status == "identified":
+        lab_differs = bool(top and top["evidence"].get("laboratory") == "conflict")
+        if level == "presentation" and reliability == "high" and not lab_differs:
+            return "confirmed"
+        return "partial"
+    return "partial" if status == "ambiguous" else "failed"
+
+
 def run_ocr(engine: OcrEngine, bgr, max_passes: int) -> tuple[OcrResult | None, list[dict]]:
     """Essaie les variantes de prétraitement puis, si rien n'est lisible, les rotations ; garde la meilleure lecture."""
     best: OcrResult | None = None
@@ -119,6 +133,13 @@ def identify_image(db: Session, data: bytes, settings: Settings, engine: OcrEngi
 
     candidates = [candidate_out(c, i + 1) for i, c in enumerate(result.candidates)]
     reliability = result.reliability if status in ("identified", "ambiguous", "contradictory") else "none"
+    level = result.level if status == "identified" else None
+    assessment = verdict(status, level, reliability, candidates[0] if candidates else None)
+    message = MESSAGES[status]
+    if status == "identified" and assessment != "confirmed":
+        top = candidates[0]
+        message = (f"{top['brand']} {top['dosage'] or ''}".strip()
+                   + " reconnu comme médicament candidat — présentation exacte non confirmée.")
     now = utcnow()
     trace = m.IdentificationResult(
         expires_at=now + timedelta(hours=settings.identification_retention_hours), image_sha256=image.sha256,
@@ -134,8 +155,8 @@ def identify_image(db: Session, data: bytes, settings: Settings, engine: OcrEngi
     timings["total_ms"] = (time.perf_counter() - t0) * 1000
 
     return {
-        "identification_id": str(trace.id) if persist else None, "status": status, "message": MESSAGES[status],
-        "reliability": reliability, "identified_level": result.level if status == "identified" else None,
+        "identification_id": str(trace.id) if persist else None, "status": status, "message": message,
+        "verdict": assessment, "reliability": reliability, "identified_level": level,
         "score_note": "Indice heuristique de correspondance (0-100) : ni une probabilité ni une précision mesurée.",
         "reasons": reasons, "warnings": list(dict.fromkeys(warnings)),
         "barcodes": [{**b.summary(), "in_catalog": result.barcode_catalog.get(b.code or "", False)} for b in barcodes],
