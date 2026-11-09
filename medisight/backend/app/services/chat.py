@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
@@ -56,9 +57,9 @@ T: dict[str, dict[str, str]] = {
                 "ar": "لم أفهم طلبك. حدد اسم الدواء وما تبحث عنه (الثمن، المادة الفعالة، العيار، الجنيس، صيدلية…)."},
     "which_medicine": {"fr": "De quel médicament parlez-vous ? Indiquez son nom (et si possible son dosage), par exemple « AMLOR 5 mg ».",
                        "ar": "عن أي دواء تتحدث؟ اذكر اسمه (والعيار إن أمكن)، مثلاً « AMLOR 5 mg »."},
-    "not_found": {"fr": "Je ne trouve pas « {q} » dans la base MEDISIGHT. Vérifiez l'orthographe ; la base de démonstration ne contient "
-                        "qu'un échantillon du Répertoire AMMPS.",
-                  "ar": "لم أجد « {q} » في قاعدة MEDISIGHT. تحقق من الإملاء؛ قاعدة العرض تحتوي فقط على عينة من سجل AMMPS."},
+    "not_found": {"fr": "Je ne trouve pas « {q} » dans la base MEDISIGHT. Vérifiez l'orthographe ; la base ne contient pour "
+                        "l'instant qu'un extrait des sources AMMPS importées.",
+                  "ar": "لم أجد « {q} » في قاعدة MEDISIGHT. تحقق من الإملاء؛ القاعدة تحتوي حاليا فقط على جزء من معطيات AMMPS."},
     "did_you_mean": {"fr": "Je n'ai pas trouvé exactement « {q} ». Vouliez-vous dire {brand} ?",
                      "ar": "لم أجد « {q} » بالضبط. هل تقصد {brand}؟"},
     "dose_missing": {"fr": "{brand} n'est pas référencé au dosage {dose} dans nos sources. Dosages disponibles : {available}. "
@@ -94,9 +95,11 @@ T: dict[str, dict[str, str]] = {
     "pharmacies_head": {"fr": "Pharmacies référencées à {city} ({n}) :", "ar": "الصيدليات المسجلة في {city} ({n}):"},
     "no_pharmacy": {"fr": "Aucune pharmacie n'est référencée à {city} dans nos sources.", "ar": "لا توجد صيدلية مسجلة في {city} في مصادرنا."},
     "duty_head": {"fr": "Pharmacies de garde à {city} en ce moment :", "ar": "صيدليات الحراسة في {city} الآن:"},
-    "no_duty": {"fr": "Aucune garde vérifiée n'est enregistrée pour {city} en ce moment. Renseignez-vous auprès de la préfecture "
-                      "ou en appelant le 141 la nuit.",
-                "ar": "لا توجد حراسة موثقة مسجلة في {city} حالياً. استفسر لدى العمالة أو اتصل بـ 141 ليلاً."},
+    # Le 141 (SAMU) est un numéro d'urgence médicale, pas un service de renseignement sur les gardes
+    "no_duty": {"fr": "Aucune information vérifiée sur les pharmacies de garde à {city} n'est actuellement disponible. "
+                      "Consultez les informations locales officielles ou renseignez-vous auprès d'une pharmacie.",
+                "ar": "لا تتوفر حالياً أي معلومات موثقة عن صيدليات الحراسة في {city}. "
+                      "راجع المعلومات المحلية الرسمية أو استفسر لدى صيدلية."},
     "stock_unverified": {"fr": "Le stock en pharmacie n'est pas vérifié : appelez la pharmacie pour confirmer la disponibilité.",
                          "ar": "المخزون في الصيدليات غير مؤكد: اتصل بالصيدلية للتأكد من توفر الدواء."},
     "marketing": {"fr": "Statut de commercialisation de {med} selon l'AMMPS : {status}.",
@@ -107,13 +110,53 @@ T: dict[str, dict[str, str]] = {
     "simulated_warning": {"fr": "Cette réponse contient des données SIMULÉES (démonstration) : elles ne sont pas réelles.",
                           "ar": "يحتوي هذا الجواب على معطيات محاكاة (للعرض فقط) وليست حقيقية."},
     "from_context": {"fr": "(Médicament de la conversation : {med}.)", "ar": "(الدواء موضوع المحادثة: {med}.)"},
+    "ambiguous_brand": {"fr": "« {q} » peut correspondre à plusieurs médicaments : {brands}. Précisez le nom exact (et le dosage) : "
+                              "je ne choisis pas à votre place.",
+                        "ar": "« {q} » قد يقصد به أكثر من دواء: {brands}. حدد الاسم بالضبط (والعيار)، لن أختار مكانك."},
+    "no_price_all": {"fr": "Le prix de {med} n'est pas disponible dans nos sources. Votre pharmacien pourra vous le confirmer.",
+                     "ar": "ثمن {med} غير متوفر في مصادرنا. يمكن للصيدلي أن يؤكده لك."},
 }
+# Darija en alphabet latin : gabarits contrôlés, relus. Une réponse dont un seul gabarit manque ici est rédigée
+# entièrement en français (jamais de traduction approximative ni de mélange) : voir handle_message.
+DARIJA: dict[str, str] = {
+    "disclaimer": "Had l ma3loumat machi nasi7a tibbiya : sowel pharmacien wla tbib. F 7alat l musta3jal : SAMU 141, "
+                  "Protection civile 15.",
+    "which_medicine": "3la ina dwa kat9sed ? Kteb smito (w dosage ila mkn), b7al « AMLOR 5 mg ».",
+    "not_found": "Ma lqitch « {q} » f la base MEDISIGHT. Chouf wach ktebti smiya mzyan ; la base fiha ghir jouz2 men "
+                 "les données dyal AMMPS.",
+    "did_you_mean": "Ma lqitch « {q} » b dabt. Wach kat9sed {brand} ?",
+    "ambiguous_brand": "« {q} » ymken ykoun {brands}. 3afak kteb smiya b dabt (w dosage) : ana ma nkhtarch blastek.",
+    "dose_missing": "{brand} ma msajjelch b dosage {dose} f les données li 3andna. Les dosages li kaynin : {available}. "
+                    "Ma kanbeddelch dosage b dosage akhor.",
+    "no_price_all": "Taman dyal {med} ma kaynch daba f les données li 3andna. T9der tsowel pharmacien bach t2akked men taman.",
+    "ingredient": "{med} fih had la substance active : {ings}.",
+    "no_ingredient": "La composition dyal {med} ma kaynach f les données li 3andna.",
+    "dosages": "{brand} kayn b had les dosages : {list}.",
+    "presentations_head": "Les boîtes dyal {med} :",
+    "no_presentation": "Ma kayna 7ta boîte msajla l {med}.",
+    "generics_reg": "Groupe générique f Répertoire AMMPS « {group} » : {members}.",
+    "generics_pharma": "Nefs la composition (machi équivalence réglementaire) : {list}.",
+    "no_generics": "Ma kayn 7ta générique dyal {med} f les données li 3andna.",
+    "generics_note": "Ghir les équivalences dyal Répertoire AMMPS homa li réglementaires ; ay tabdil dyal dwa khasso "
+                     "ykoun m3a pharmacien dyalek.",
+    "from_context": "(Dwa dyal had la conversation : {med}.)",
+    "ask_city": "F ina mdina kat9elleb 3la pharmacie ? (b7al « pharmacie f Rabat »)",
+    "no_duty": "Ma kayna daba 7ta ma3louma mwettqa 3la les pharmacies de garde f {city}. Chouf les informations locales "
+               "officielles wla sowel f chi pharmacie.",
+}
+for _key, _text in DARIJA.items():
+    T[_key]["darija"] = _text
+
+# Signale qu'un gabarit darija manquait pendant la construction d'une réponse (repli complet sur le français)
+_DARIJA_GAP: ContextVar[bool] = ContextVar("darija_gap", default=False)
 TOPIC = {"indications": {"fr": "indications", "ar": "دواعي الاستعمال"},
          "precautions": {"fr": "précautions, contre-indications et effets indésirables", "ar": "الاحتياطات وموانع الاستعمال"},
          "posology": {"fr": "informations de posologie", "ar": "معلومات الجرعة"}}
 
 
 def t(key: str, lang: str, **kw) -> str:
+    if lang == "darija" and "darija" not in T[key]:
+        _DARIJA_GAP.set(True)
     return T[key].get(lang, T[key]["fr"]).format(**kw)
 
 
@@ -198,14 +241,24 @@ def resolve(db: Session, message: str, ent: Entities, context: m.Medicine | None
         residual = _residual(message, ent)
         if residual and intent in MEDICINE_INTENTS | {"unknown"}:
             found = catalog.search_medicines(db, residual, size=MAX_MEDS)
+            # avec un médicament de conversation, une simple suggestion approximative du catalogue (« vouliez-vous
+            # dire ») ne le remplace pas : « et son prix ? » porte sur le contexte, pas sur un nom proche de « son »
+            if found["items"] and context is not None and found["meta"].get("did_you_mean"):
+                found = {"items": [], "meta": {}}
             if found["items"]:
                 res.did_you_mean = found["meta"].get("did_you_mean")
                 res.brand_meds = _load_brand(db, [normalize_text(found["items"][0]["brand"])])
             elif intent in MEDICINE_INTENTS and not context:
                 res.query = residual
         if not res.brand_meds and context is not None and intent in MEDICINE_INTENTS:
-            res.brand_meds, res.from_context = [context], True
-            return _finish(res, ent, ignore_dose=True)
+            res.from_context = True
+            if ent.dose is None:
+                res.brand_meds = [context]
+                return _finish(res, ent, ignore_dose=True)
+            # dosage explicite (« prix du 10 mg ? ») : prioritaire sur le dosage du contexte, pour la même marque ;
+            # absent du catalogue -> « dosage non référencé », jamais le dosage du contexte à sa place
+            res.brand_meds = _load_brand(db, [context.brand_normalized])
+            return _finish(res, ent)
     if res.did_you_mean:
         res.query = _residual(message, ent)
     return _finish(res, ent)
@@ -228,6 +281,16 @@ def _flag(med_or_status, lang: str) -> str:
 
 
 def answer_price(r: Reply, meds: list[m.Medicine], lang: str) -> None:
+    if lang == "darija":
+        if any(p.ppv_mad is not None for med in meds for p in med.presentations):
+            _DARIJA_GAP.set(True)  # prix, dates et sources : réponse détaillée en français
+        else:
+            for med in meds:
+                r.source(med.source, med.data_status)
+                for p in med.presentations:
+                    r.source(p.source, p.data_status)
+                r.lines.append(t("no_price_all", lang, med=med_label(med)) + _flag(med, lang))
+            return
     for med in meds:
         r.lines.append(t("price_head", lang, med=med_label(med)) + _flag(med, lang))
         r.source(med.source, med.data_status)
@@ -413,9 +476,9 @@ SUGGESTIONS = {
     "ar": ["شنو المادة الفعالة ديال {b}؟", "شنو العيارات ديال {b}؟", "شحال ثمن {m}؟", "واش كاين بديل ديال {m}؟"],
 }
 GENERIC_SUGGESTIONS = {
-    "fr": ["Prix du Doliprane 500 mg", "Quelle est la substance active d'AMLOR 5 mg ?", "Génériques d'AMLOR 5 mg",
-           "Je cherche une pharmacie à Rabat", "Ch7al taman dyal Doliprane 500mg ?"],
-    "ar": ["شنو المادة الفعالة ديال AMLOR؟", "صيدلية في الرباط", "شحال ثمن Doliprane 500mg؟"],
+    "fr": ["Prix d'ABILIFY 10 mg", "Quelle est la substance active d'AMLOR 5 mg ?", "Génériques d'AMLOR 5 mg",
+           "Je cherche une pharmacie à Rabat", "Ch7al taman dyal Abilify 10 mg ?"],
+    "ar": ["شنو المادة الفعالة ديال AMLOR؟", "صيدلية في الرباط", "شحال ثمن ABILIFY 10 mg؟"],
 }
 
 
@@ -466,7 +529,7 @@ def handle_message(db: Session, settings: Settings, message: str, *, conversatio
         if conv.context_medicine_id else None
 
     name = intent.name
-    if name == "unknown" and (ent.medicines or ent.ingredients):
+    if name == "unknown" and (ent.medicines or ent.ingredients or ent.ambiguous):
         name = "medicine_info"
     if name in ("pharmacy_search", "on_duty", "greeting", "help", "unknown") and ent.city and name != "on_duty":
         name = "pharmacy_search"
@@ -474,6 +537,75 @@ def handle_message(db: Session, settings: Settings, message: str, *, conversatio
     if name == "unknown" and res.meds:
         name = "medicine_info"
 
+    # Darija latine : réponse en darija si tous les gabarits nécessaires existent, sinon tout en français
+    reply_lang = "darija" if lang_guess.code == "darija_latin" else lang
+    base_warnings = list(r.warnings)
+    gap = _DARIJA_GAP.set(False)
+    try:
+        r = _compose(db, settings, conv, Reply(warnings=list(base_warnings)), name, res, ent, reply_lang)
+        if reply_lang == "darija" and _DARIJA_GAP.get():
+            reply_lang = "fr"
+            r = _compose(db, settings, conv, Reply(warnings=list(base_warnings)), name, res, ent, reply_lang)
+    finally:
+        _DARIJA_GAP.reset(gap)
+
+    for med in r.meds:
+        r.simulated |= med.data_status == "simulated"
+    if r.simulated:
+        r.warnings.append(t("simulated_warning", "fr"))
+    if lang_guess.code == "darija_latin" and reply_lang == "fr":
+        r.warnings.append("Message en darija (alphabet latin) : réponse rédigée en français (aucune formulation darija "
+                          "fiable pour cette réponse).")
+    if intent.name == "unknown" and r.understanding == "understood":
+        r.understanding = "partial"
+
+    current = context if conv.context_medicine_id == (context.id if context else None) else \
+        db.scalar(select(m.Medicine).options(*_LOAD).where(m.Medicine.id == conv.context_medicine_id))
+    text = "\n".join(r.lines)
+    medicines = []
+    seen_ids: set[int] = set()
+    for med in r.meds:
+        if med.id not in seen_ids:
+            seen_ids.add(med.id)
+            medicines.append(medicine_card(med))
+    language = {**lang_guess.summary(), "reply_language": reply_lang}
+    analysis = {"language": language, "intent": {**intent.summary(), "resolved": name},
+                "entities": ent.summary(), "understanding": r.understanding}
+    conv.language = lang_guess.code
+    if persist:
+        # le texte de l'utilisateur n'est pas conservé (il peut contenir des données de santé) : seule l'analyse l'est
+        db.add(m.Message(conversation_id=conv.id, role="user", content="[non conservé]", analysis=analysis))
+        db.add(m.Message(conversation_id=conv.id, role="assistant", content=text,
+                         sources=list(r.sources.values())))
+        db.commit()
+    return {
+        "conversation_id": str(conv.id), "message": text, "language": language,
+        "intent": {**intent.summary(), "resolved": name}, "entities": ent.summary(),
+        "understanding": r.understanding, "medicines": medicines, "pharmacies": r.pharmacies,
+        "sources": list(r.sources.values()), "warnings": list(dict.fromkeys(r.warnings)),
+        "context_medicine": medicine_card(current) if current else None,
+        "suggestions": suggestions_for(current or (r.meds[0] if r.meds else None), lang),
+        "contains_simulated_data": r.simulated, "generation": "template", "disclaimer": t("disclaimer", reply_lang),
+    }
+
+
+def _compose(db: Session, settings: Settings, conv: m.Conversation, r: Reply, name: str, res: Resolution,
+             ent: Entities, lang: str) -> Reply:
+    """Construit la réponse (lignes, médicaments, sources) dans la langue `lang` ; rejouable sans effet de bord
+    autre que le contexte de la conversation, fixé de façon identique."""
+    if ent.ambiguous and not ent.medicines and name in MEDICINE_INTENTS:
+        # nom approximatif également proche de plusieurs marques : on liste, on ne choisit pas
+        amb = ent.ambiguous[0]
+        meds = _load_brand(db, amb.brands)
+        if ent.dose is not None:
+            meds = [x for x in meds if _dose_matches(x, ent)] or meds
+        r.understanding = "ambiguous"
+        brands = list(dict.fromkeys(x.brand_name for x in meds)) or [b.upper() for b in amb.brands]
+        r.lines.append(t("ambiguous_brand", lang, q=amb.text, brands=" / ".join(brands)))
+        r.meds = meds[:MAX_MEDS]
+        for med in r.meds:
+            r.source(med.source, med.data_status)
+        return r
     if name == "emergency":
         r.understanding = "emergency"
         r.lines.append(t("emergency", lang, poison=settings.poison_center))
@@ -526,45 +658,11 @@ def handle_message(db: Session, settings: Settings, message: str, *, conversatio
                 answer_availability(db, r, ent, res.meds, lang)
             else:
                 answer_info(r, res.meds, lang)
-            if len({x.brand_normalized for x in res.meds}) == 1 and not res.did_you_mean:
-                conv.context_medicine_id = res.meds[0].id  # pour les questions de suivi (« et son prix ? »)
+            # contexte des questions de suivi (« et son prix ? ») : un seul médicament désigné, jamais un dosage choisi
+            # arbitrairement parmi plusieurs (« dosages d'AMLOR » ne fixe ni AMLOR 5 MG ni AMLOR 10 MG)
+            if len({x.id for x in res.meds}) == 1 and not res.did_you_mean:
+                conv.context_medicine_id = res.meds[0].id
     else:
         r.understanding = "not_understood"
         r.lines.append(t("unknown", lang))
-
-    for med in r.meds:
-        r.simulated |= med.data_status == "simulated"
-    if r.simulated:
-        r.warnings.append(t("simulated_warning", "fr"))
-    if lang_guess.code == "darija_latin":
-        r.warnings.append("Message en darija (alphabet latin) : réponse rédigée en français.")
-    if intent.name == "unknown" and r.understanding == "understood":
-        r.understanding = "partial"
-
-    current = context if conv.context_medicine_id == (context.id if context else None) else \
-        db.scalar(select(m.Medicine).options(*_LOAD).where(m.Medicine.id == conv.context_medicine_id))
-    text = "\n".join(r.lines)
-    medicines = []
-    seen_ids: set[int] = set()
-    for med in r.meds:
-        if med.id not in seen_ids:
-            seen_ids.add(med.id)
-            medicines.append(medicine_card(med))
-    analysis = {"language": lang_guess.summary(), "intent": {**intent.summary(), "resolved": name},
-                "entities": ent.summary(), "understanding": r.understanding}
-    conv.language = lang_guess.code
-    if persist:
-        # le texte de l'utilisateur n'est pas conservé (il peut contenir des données de santé) : seule l'analyse l'est
-        db.add(m.Message(conversation_id=conv.id, role="user", content="[non conservé]", analysis=analysis))
-        db.add(m.Message(conversation_id=conv.id, role="assistant", content=text,
-                         sources=list(r.sources.values())))
-        db.commit()
-    return {
-        "conversation_id": str(conv.id), "message": text, "language": lang_guess.summary(),
-        "intent": {**intent.summary(), "resolved": name}, "entities": ent.summary(),
-        "understanding": r.understanding, "medicines": medicines, "pharmacies": r.pharmacies,
-        "sources": list(r.sources.values()), "warnings": list(dict.fromkeys(r.warnings)),
-        "context_medicine": medicine_card(current) if current else None,
-        "suggestions": suggestions_for(current or (r.meds[0] if r.meds else None), lang),
-        "contains_simulated_data": r.simulated, "generation": "template", "disclaimer": t("disclaimer", lang),
-    }
+    return r

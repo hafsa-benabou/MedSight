@@ -1,0 +1,6 @@
+# Livrables déposés séparément (Google Drive) et fichiers locaux non publiés
+presentation/
+*.pptx
+*.mp4
+*.dump
+*.sql.gz

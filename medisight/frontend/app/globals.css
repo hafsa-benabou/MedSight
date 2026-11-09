@@ -9,12 +9,27 @@ body { @apply bg-paper text-ink antialiased; }
 :focus-visible { outline: 3px solid #247BA0; outline-offset: 2px; border-radius: 4px; }
 .prose-copy { max-width: 68ch; line-height: 1.6; }
 
-/* Accueil : un seul moment animé, l'interprétation d'une requête en darija */
-.parse-token { background-image: linear-gradient(#DDF7F2, #DDF7F2); background-repeat: no-repeat;
-  background-size: 0% 100%; border-radius: 3px; animation: mark .45s ease-out forwards; }
-@keyframes mark { to { background-size: 100% 100%; } }
-.parse-field { opacity: 0; transform: translateY(6px); animation: reveal .4s ease-out forwards; }
+/* Accueil : slogan dominant, largeur moins étendue pour tenir sur mobile */
+.hero-title { font-size: clamp(2.5rem, 8.5vw, 5.75rem); font-stretch: 112%; line-height: 1.04; letter-spacing: -0.03em; }
+.hero-bg { background:
+  radial-gradient(55% 60% at 50% 0%, rgba(25,167,140,0.13), transparent 70%),
+  radial-gradient(35% 45% at 95% 40%, rgba(36,123,160,0.10), transparent 70%),
+  radial-gradient(35% 45% at 5% 70%, rgba(36,123,160,0.08), transparent 70%),
+  linear-gradient(#FFFFFF, #F5F8FA); }
+.hero-grid { background-image: radial-gradient(rgba(18,59,93,0.10) 1px, transparent 1px); background-size: 24px 24px;
+  mask-image: radial-gradient(60% 55% at 50% 40%, #000, transparent); -webkit-mask-image: radial-gradient(60% 55% at 50% 40%, #000, transparent); }
+
+/* Animations décoratives, désactivées si l'utilisateur réduit les animations */
+.fade-up { opacity: 0; transform: translateY(10px); animation: reveal .6s ease-out forwards; }
 @keyframes reveal { to { opacity: 1; transform: none; } }
+.float-soft { animation: float 9s ease-in-out infinite; }
+@keyframes float { 50% { transform: translateY(-10px); } }
+/* Chatbot : apparition des messages et indicateur d'analyse */
+.msg-in { animation: reveal .3s ease-out both; opacity: 0; transform: translateY(6px); }
+.typing-dot { display: block; width: 6px; height: 6px; border-radius: 9999px; background: #19A78C; animation: typing 1.2s ease-in-out infinite; }
+.typing-dot:nth-child(2) { animation-delay: .15s; }
+.typing-dot:nth-child(3) { animation-delay: .3s; }
+@keyframes typing { 0%, 60%, 100% { opacity: .3; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) {
-  .parse-token, .parse-field { animation: none; background-size: 100% 100%; opacity: 1; transform: none; }
+  .fade-up, .float-soft, .msg-in, .typing-dot { animation: none; opacity: 1; transform: none; }
 }

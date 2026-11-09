@@ -10,6 +10,8 @@ TEST_DB = os.environ.get("TEST_DATABASE_NAME", "medisight_test")
 BASE = os.environ.get("TEST_DATABASE_BASE", "postgresql+psycopg://medisight:medisight@localhost:5432")
 os.environ["DATABASE_URL"] = f"{BASE}/{TEST_DB}"
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
+# Contexte de test : le jeu de démonstration simulé reste visible (masqué par défaut pour l'API publique)
+os.environ.setdefault("SHOW_SIMULATED_DATA", "true")
 ROOT = Path(__file__).resolve().parents[2]
 
 

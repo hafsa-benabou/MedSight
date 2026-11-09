@@ -20,7 +20,9 @@ DARIJA_LAT = {"ch7al", "chhal", "chehal", "ch7al", "bch7al", "bchhal", "wach", "
               "mzyan", "khasni", "n9leb", "nl9a", "nlqa", "taman", "tamane", "taman", "ghali", "rkhis", "chi", "machi",
               "dwa", "dawa", "sbitar", "saydaliya", "saydlia", "farmasyan", "fermasyan", "bzaf", "9adach", "ola", "wla",
               "chno", "chnou", "achno", "ach", "smito", "katdir", "kaydir", "kandir", "ndir", "nchri", "nakhod", "nakhdo",
-              "wa7ed", "wa7da", "mra", "rasi", "kerchi", "brd", "l3ayalat", "drari", "mo3a", "m3a", "lih", "liha", "ana"}
+              "wa7ed", "wa7da", "mra", "rasi", "kerchi", "brd", "l3ayalat", "drari", "mo3a", "m3a", "lih", "liha", "ana",
+              "chnahuma", "chnahoma", "achnahuma", "achnahoma", "chnuma", "chnouma", "homa", "huma", "kaynin", "kaynine",
+              "3andkom", "3ndkom", "chkoun", "fach"}
 FRENCH = {"le", "la", "les", "de", "du", "des", "un", "une", "est", "quel", "quelle", "quels", "quelles", "prix", "combien",
           "je", "cherche", "pour", "pharmacie", "médicament", "medicament", "sont", "et", "avec", "sans", "dans", "ou",
           "bonjour", "merci", "coute", "substance", "active", "generique", "generiques", "dosage", "dosages", "qu", "est-ce",
@@ -33,7 +35,7 @@ ENGLISH = {"the", "what", "is", "price", "how", "much", "of", "where", "find", "
 class LanguageGuess:
     code: str  # fr | ar | darija | darija_latin | en
     script: str  # latin | arabic | mixed
-    reply_language: str  # fr | ar  (les réponses darija latines sont rédigées en français, plus lisible)
+    reply_language: str  # fr | ar ; darija latine : le chatbot répond en darija si gabarit fiable, sinon en français
     confidence: float
 
     def summary(self) -> dict:

@@ -90,16 +90,19 @@ export function postFile<T>(path: string, file: Blob, name: string, signal?: Abo
 
 // --- Pill Identifier (POST /api/pills/identify) ---
 export type IdentifyStatus = "identified" | "ambiguous" | "contradictory" | "not_found" | "unreadable" | "ocr_unavailable";
-export type Evidence = { barcode: string; brand_similarity: number; dosage: string; substance: string; form: string; pack: string };
+export type Evidence = { barcode: string; brand_similarity: number; dosage: string; substance: string; form: string; pack: string;
+  laboratory?: string };
+/** Lecture prudente calculée par le backend d'après la nature des indices (pas d'après le seul score). */
+export type IdentifyVerdict = "confirmed" | "partial" | "failed";
 export type PillCandidate = { rank: number; score: number; medicine_id: number; presentation_id: number; brand: string;
   dosage: string | null; form: string | null; presentation: string; ean13: string | null; ppv: number | null;
   price_as_of: string | null; ingredients: { name: string; strength: string | null }[]; laboratory: string | null;
   data_status: string; source: SourceRef; medicine_source: SourceRef; evidence: Evidence; found_by: string[]; explanation: string[] };
-export type IdentifyResponse = { identification_id: string | null; status: IdentifyStatus; message: string; reliability: string;
+export type IdentifyResponse = { identification_id: string | null; status: IdentifyStatus; verdict?: IdentifyVerdict; message: string; reliability: string;
   identified_level: string | null; score_note: string; reasons: string[]; warnings: string[];
   barcodes: { code: string | null; format: string; status: string; reader: string; in_catalog: boolean; expiry?: string; lot?: string }[];
   extracted: { brand_segments: string[]; dosage_text: string | null; doses: { text: string }[]; substances: { name: string }[];
-    form: string | null; pack_text: string | null; laboratory: string | null };
+    form: string | null; form_text?: string | null; pack_text: string | null; pack_quantity?: number | null; laboratory: string | null };
   candidates: PillCandidate[]; available_dosages: string[];
   ocr: { engine: string | null; available: boolean; languages: string | null; version: string | null; variant: string | null;
     rotation: number; mean_confidence: number | null; lines: { text: string; confidence: number }[] };
@@ -108,7 +111,7 @@ export type IdentifyResponse = { identification_id: string | null; status: Ident
 // --- Chatbot (POST /api/chat) ---
 export type ChatSource = { code: string; name: string; url: string | null; license: string | null; data_status: string };
 export type ChatResponse = { conversation_id: string; message: string;
-  language: { code: string; script: string; reply_language: "fr" | "ar"; confidence: number };
+  language: { code: string; script: string; reply_language: "fr" | "ar" | "darija"; confidence: number };
   intent: { name: string; resolved: string; confidence: number; matched: string[] };
   entities: { medicines: { text: string; brand: string; score: number; method: string }[];
     ingredients: { text: string; name: string }[]; dose: { text: string; value: number; unit: string | null } | null; city: string | null };

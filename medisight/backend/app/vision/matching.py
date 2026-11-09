@@ -45,6 +45,7 @@ class Evidence:
     substance: str = "unknown"
     form: str = "unknown"
     pack: str = "unknown"
+    laboratory: str = "unknown"  # affiché seulement : n'entre ni dans le score ni dans conflicts()
 
     def conflicts(self) -> list[str]:
         return [k for k in ("barcode", "dosage", "substance", "form", "pack") if getattr(self, k) == "conflict"]
@@ -147,6 +148,27 @@ def _form_evidence(ex: Extracted, med: m.Medicine) -> str:
     # « comprimé » lu sur une boîte de comprimés effervescents ou pelliculés : compatible, pas contradictoire
     if ex.form == "comprime" and own.startswith("comprime"):
         return "unknown"
+    # « capsules » (anglais, néerlandais…) imprimé sur une boîte de gélules : même forme, pas une contradiction
+    if {ex.form, own} == {"gelule", "capsule"}:
+        return "unknown"
+    return "conflict"
+
+
+_LAB_GENERIC = {"laboratoire", "laboratoires", "labo", "lab", "labs", "pharma", "pharmaceutical", "pharmaceuticals",
+                "pharmaceutique", "pharmaceutiques", "sante", "healthcare", "maroc", "morocco", "sa", "sarl", "ltd", "inc"}
+
+
+def _lab_evidence(ex: Extracted, med: m.Medicine) -> str:
+    """Laboratoire lu sur la photo comparé à celui du catalogue. Indice affiché, non compté dans l'indice de
+    correspondance : un titulaire différent peut être légitime (transfert d'AMM, boîte d'un autre pays)."""
+    if not ex.laboratory or not med.laboratory:
+        return "unknown"
+    read = {w for w in normalize_text(ex.laboratory).split() if len(w) >= 3 and w not in _LAB_GENERIC}
+    own = {w for w in normalize_text(med.laboratory.name).split() if len(w) >= 3 and w not in _LAB_GENERIC}
+    if not read or not own:
+        return "unknown"
+    if any(fuzz.ratio(a, b) >= 85 for a in read for b in own):
+        return "match"
     return "conflict"
 
 
@@ -169,6 +191,9 @@ def explain(c: Candidate) -> list[str]:
                        ("pack", "Conditionnement")):
         v = getattr(e, key)
         out.append(f"{label} : {labels.get(v, 'non lu ou non comparable')}")
+    if e.laboratory != "unknown":
+        out.append("Laboratoire : " + ("concordant" if e.laboratory == "match"
+                                       else "DIFFÉRENT de la fiche (à vérifier, non compté dans l'indice)"))
     return out
 
 
@@ -184,7 +209,7 @@ def candidate_out(c: Candidate, rank: int) -> dict:
         "source": source_ref(pres.source), "medicine_source": source_ref(med.source),
         "evidence": {"barcode": c.evidence.barcode, "brand_similarity": round(c.evidence.brand, 1),
                      "dosage": c.evidence.dosage, "substance": c.evidence.substance, "form": c.evidence.form,
-                     "pack": c.evidence.pack},
+                     "pack": c.evidence.pack, "laboratory": c.evidence.laboratory},
         "found_by": sorted(c.via), "explanation": explain(c),
     }
 
@@ -257,22 +282,26 @@ def match(db: Session, ex: Extracted, barcodes: list[BarcodeRead], *, include_si
                 bc = "match" if pres.ean13 in known_codes else "conflict"
             else:
                 bc = "unknown"  # y compris chiffres lus par OCR : pas assez sûrs pour valoir un code-barres lu
-            ev = Evidence(bc, sim, name, dosage, substance, form, _pack_evidence(ex, pres))
+            ev = Evidence(bc, sim, name, dosage, substance, form, _pack_evidence(ex, pres), _lab_evidence(ex, med))
             candidates[pres.id] = Candidate(med, pres, ev, set(via))
 
     # Règle 1 : un dosage contradictoire élimine le candidat (sauf s'il a été trouvé par code-barres : contradiction)
     dosage_rejected = [c for c in candidates.values() if c.evidence.dosage == "conflict" and c.evidence.barcode != "match"]
-    if dosage_rejected:
-        avail = sorted({c.medicine.dosage_text for c in dosage_rejected if c.medicine.dosage_text})
-        names = sorted({c.medicine.brand_name for c in dosage_rejected})
-        reasons.append(f"Dosage lu ({ex.dosage_text}) absent du catalogue pour {', '.join(names)} : "
-                       f"aucune autre dose n'est proposée à sa place")
-    else:
-        avail = []
     pool = [c for c in candidates.values() if c not in dosage_rejected]
     # nom seul ou composition seule, très faible : écarté du classement
     pool = [c for c in pool if c.score >= 20 or "barcode" in c.via]
     pool.sort(key=lambda c: (-c.score, c.medicine.brand_normalized, c.presentation.id))
+    # le dosage lu n'est « absent » que pour les marques dont aucune autre fiche ne le porte (ex. AMLOR 10 MG écarté
+    # alors qu'AMLOR 5 MG est retenu : ne pas annoncer « 5 mg absent pour AMLOR »)
+    kept_brands = {c.medicine.brand_normalized for c in pool}
+    absent = [c for c in dosage_rejected if c.medicine.brand_normalized not in kept_brands]
+    if absent:
+        avail = sorted({c.medicine.dosage_text for c in absent if c.medicine.dosage_text})
+        names = sorted({c.medicine.brand_name for c in absent})
+        reasons.append(f"Dosage lu ({ex.dosage_text}) absent du catalogue pour {', '.join(names)} : "
+                       f"aucune autre dose n'est proposée à sa place")
+    else:
+        avail = []
 
     if not pool:
         status = "not_found"
@@ -292,6 +321,11 @@ def match(db: Session, ex: Extracted, barcodes: list[BarcodeRead], *, include_si
                        f"mais le texte lu le contredit ({what})")
         return MatchResult("contradictory", "low", None, pool[:3], reasons, warnings, avail, barcode_catalog)
 
+    if e.form == "conflict" and top.medicine.form:
+        reasons.append(f"Forme lue sur la photo (« {ex.form_text or ex.form} ») différente de celle de la fiche du "
+                       f"catalogue ({top.medicine.form.label}) : il peut s'agir d'une autre présentation, non référencée")
+    if e.pack == "conflict":
+        reasons.append(f"Conditionnement lu sur la photo (« {ex.pack_text} ») différent de « {top.presentation.label} »")
     corroborations = sum([e.brand >= 85, e.dosage == "match", e.substance == "match"])
     text_evidence = ex.has_evidence
     identified, reliability = False, "low"
@@ -304,6 +338,16 @@ def match(db: Session, ex: Extracted, barcodes: list[BarcodeRead], *, include_si
         elif e.brand >= BRAND_STRONG and e.dosage == "match":
             extra = sum([e.form == "match", e.pack == "match", e.substance == "match"])
             identified, reliability = True, "high" if extra >= 1 else "medium"
+            if e.form == "unknown":
+                form = top.medicine.form.label if top.medicine.form else "non renseignée"
+                lab = top.medicine.laboratory.name if top.medicine.laboratory else "non renseigné"
+                warnings.append(f"Forme pharmaceutique non lue sur la photo : vérifiez sur la boîte qu'il s'agit bien de "
+                                f"la forme « {form} » (laboratoire {lab}) ; une boîte d'un autre pays ou d'une autre "
+                                f"forme peut porter le même nom.")
+    if e.laboratory == "conflict" and top.medicine.laboratory:
+        warnings.append(f"Laboratoire lu sur la photo (« {ex.laboratory} ») différent de celui de la fiche "
+                        f"({top.medicine.laboratory.name}) : boîte possiblement d'un autre pays ou d'un autre titulaire, "
+                        f"à vérifier.")
     if not identified:
         if e.brand >= BRAND_MIN and e.dosage == "unknown":
             reasons.append("Nom reconnu mais dosage non lu : plusieurs dosages restent possibles")
@@ -318,10 +362,19 @@ def match(db: Session, ex: Extracted, barcodes: list[BarcodeRead], *, include_si
         reasons.append("Plusieurs spécialités correspondent presque aussi bien aux indices lus")
         return MatchResult("ambiguous", "low", None, pool[:3], reasons, warnings, avail, barcode_catalog)
     siblings = [c for c in pool[1:] if c.medicine.id == top.medicine.id and abs(c.score - top.score) < 1e-6]
+    agreeing = [label for key, label in (("barcode", "code-barres lu"), ("dosage", "dosage"), ("substance", "substance"),
+                                         ("form", "forme"), ("pack", "conditionnement"))
+                if getattr(e, key) == "match"]
+    if e.brand >= BRAND_MIN:
+        agreeing.insert(0, "nom")
     if siblings:
-        reasons.append("Spécialité et dosage identifiés ; conditionnement non lu : "
-                       f"{len(siblings) + 1} présentations possibles, toutes listées")
-        return MatchResult("identified", reliability, "medicine", [top, *siblings][:3], reasons, warnings, avail,
-                           barcode_catalog)
-    reasons.append("Plusieurs indices concordants sans contradiction")
+        group = [top, *siblings][:3]
+        reasons.append(f"Le nom {top.medicine.brand_name} et le dosage {top.medicine.dosage_text or ''} ont été reconnus. "
+                       f"Le conditionnement n'a pas été suffisamment identifié pour distinguer les {len(siblings) + 1} "
+                       f"présentations disponibles ({', '.join(c.presentation.label for c in group)}) : toutes sont "
+                       "listées, aucune n'est retenue à la place des autres.")
+        reasons.append("Pour les départager : le code-barres de la boîte, ou le nombre d'unités imprimé "
+                       "(ex. « 28 comprimés »), lisible sur la photo.")
+        return MatchResult("identified", reliability, "medicine", group, reasons, warnings, avail, barcode_catalog)
+    reasons.append("Indices concordants, sans contradiction : " + ", ".join(agreeing))
     return MatchResult("identified", reliability, "presentation", pool[:3], reasons, warnings, avail, barcode_catalog)

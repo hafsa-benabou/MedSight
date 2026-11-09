@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     medbase_base_url: str = "https://api.medbase.ma/api/v1"
 
     simulated_stock_enabled: bool = True
+    show_simulated_data: bool = False  # développement et tests uniquement : l'API publique n'expose jamais la démo simulée
     ocr_engine: str = "tesseract"  # tesseract | none
     tesseract_langs: str = "fra+ara+eng"
     tesseract_cmd: str | None = None  # chemin de tesseract.exe s'il n'est pas dans le PATH (Windows)

@@ -23,14 +23,19 @@ _UNIT_MAP = {"mg": "mg", "mgr": "mg", "ملغ": "mg", "مغ": "mg", "ملغرا�
 _MASS_MG = {"mg": Decimal(1), "g": Decimal(1000), "µg": Decimal("0.001")}
 _DOSE = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?) ?(mgr|mg|g|gr|mcg|µg|μg|ug|ml|ui|%|ملغرام|ملغ|مغ|غرام|غ|مل)(?![^\W\d_])")
 _BARE_NUMBER = re.compile(r"^\d{1,4}(?:\.\d+)?$")
+# Rapprochement approximatif : deux marques à moins de AMBIGUITY_MARGIN points l'une de l'autre sont indiscernables
+# (« amlo » : AMLOR 88,9 = AMILO 88,9) ; aucune n'est choisie à la place de l'utilisateur
+AMBIGUITY_MARGIN = 3.0
 # Mots courants à ne jamais prendre pour un nom de médicament (mots outils, interrogatifs, darija)
 STOPWORDS = {
     "le", "la", "les", "de", "du", "des", "un", "une", "et", "ou", "en", "a", "au", "aux", "est", "sont", "je", "tu",
     "il", "elle", "on", "nous", "vous", "me", "moi", "ce", "cet", "cette", "ces", "mon", "ma", "mes", "quel", "quelle",
+    # possessifs et pronoms de reprise (« et son prix ? ») : désignent le médicament de la conversation, jamais un nom
+    "son", "sa", "ses", "ton", "ta", "tes", "leur", "leurs", "notre", "votre", "nos", "vos", "lui", "celui", "celle",
     "quels", "quelles", "qui", "que", "quoi", "pour", "par", "sur", "dans", "avec", "sans", "pas", "plus", "y", "d", "l",
     "s", "qu", "c", "j", "n", "m", "t", "medicament", "medicaments", "dwa", "dawa", "doua", "ville", "svp", "stp", "merci",
     "bonjour", "salam", "dyal", "dial", "had", "hada", "hadi", "wach", "fin", "chno", "ach", "bghit", "3afak", "f", "fi",
-    "b", "l", "m3a", "mo3a", "the", "of", "is", "what", "for", "and", "existe", "cherche", "chercher", "trouver",
+    "b", "l", "m3a", "mo3a", "chnahuma", "chnahoma", "achnahuma", "homa", "huma", "the", "of", "is", "what", "for", "and", "existe", "cherche", "chercher", "trouver",
     "donne", "donner", "connaitre", "savoir", "info", "infos", "information", "informations", "fiche", "rien", "tout",
     "شنو", "اش", "واش", "ديال", "هاد", "هادا", "هادي", "فين", "في", "من", "على", "الى", "عن", "هل", "ما", "ماهو", "ماهي",
     "دوا", "الدوا", "الدواء", "دواء", "بغيت", "عافاك", "مدينه", "ف", "ب", "ل", "و", "شي", "كاين", "هو", "هي", "لي",
@@ -43,6 +48,13 @@ class MedicineMention:
     brand: str  # nom commercial reconnu (forme normalisée de la base)
     score: float  # similarité 0-100
     method: str  # exact | fuzzy | arabic_skeleton | alias
+
+
+@dataclass
+class AmbiguousMention:
+    text: str  # segment du message
+    brands: list[str]  # marques normalisées également proches (ordre de similarité)
+    score: float
 
 
 @dataclass
@@ -68,6 +80,7 @@ class Entities:
     dose: DoseMention | None = None
     city: str | None = None
     city_text: str | None = None
+    ambiguous: list[AmbiguousMention] = field(default_factory=list)
 
     def summary(self) -> dict:
         return asdict(self)
@@ -186,10 +199,19 @@ def extract_entities(message: str, vocab: Vocabulary) -> Entities:
         if n == 1 and gram in TRIGGER_TOKENS:
             continue
         if len(gram.replace(" ", "")) >= 4:
-            best = max(vocab.brands, key=lambda b: fuzz.ratio(gram, b), default=None)
-            score = fuzz.ratio(gram, best) if best else 0
-            if best and score >= (82 if len(gram) >= 6 else 88):
-                ent.medicines.append(MedicineMention(gram, vocab.brands[best], round(score, 1), "fuzzy"))
+            threshold = 82 if len(gram) >= 6 else 88
+            ranked = sorted(((fuzz.ratio(gram, b), b) for b in vocab.brands), reverse=True)
+            close: list[str] = []
+            for score, b in ranked:
+                if score < threshold or score < ranked[0][0] - AMBIGUITY_MARGIN:
+                    break
+                if vocab.brands[b] not in close:
+                    close.append(vocab.brands[b])
+            if len(close) > 1:
+                ent.ambiguous.append(AmbiguousMention(gram, close, round(ranked[0][0], 1)))
+                take(i, n)
+            elif close:
+                ent.medicines.append(MedicineMention(gram, close[0], round(ranked[0][0], 1), "fuzzy"))
                 take(i, n)
 
     # 3. dosage : de préférence juste après le nom reconnu

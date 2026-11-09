@@ -199,6 +199,45 @@ def test_unknown_pack_lists_every_possible_presentation(seeded, settings):
     assert r14["identified_level"] == "presentation" and r14["candidates"][0]["presentation"] == "BOITE DE 14"
 
 
+def test_verdict_depends_on_the_nature_of_the_evidence(seeded, settings):
+    # nom + dosage seuls, deux présentations à égalité : candidat reconnu, présentation NON confirmée (orange)
+    r = run(seeded, box_image(), ["AMLOR", "5 mg"], settings)
+    assert r["status"] == "identified" and r["verdict"] == "partial" and r["identified_level"] == "medicine"
+    assert r["message"] == "AMLOR 5 MG reconnu comme médicament candidat — présentation exacte non confirmée."
+    assert sorted(c["presentation"] for c in r["candidates"]) == ["BOITE DE 14", "BOITE DE 28"]
+    assert {c["score"] for c in r["candidates"]} == {45.0}  # indice inchangé : aucun gagnant arbitraire
+    assert any("Pour les départager" in x for x in r["reasons"]) and r["barcodes"] == []
+    # code-barres lu + texte concordant : présentation confirmée (vert)
+    assert run(seeded, box_image(barcode=AMLOR_5_28), ["AMLOR 5 mg", "28 comprimés"], settings)["verdict"] == "confirmed"
+    assert run(seeded, box_image(), ["AMLOR 5 mg", "14 comprimés"], settings)["verdict"] == "confirmed"
+    # contradiction ou absence : échec (rouge)
+    assert run(seeded, box_image(barcode=AMLOR_5_28), ["AMLOR 10 mg"], settings)["verdict"] == "failed"
+    assert run(seeded, box_image(), ["AMLOR", "20 mg"], settings)["verdict"] == "failed"
+
+
+def test_photo_form_differing_from_catalogue_is_reported(seeded, settings):
+    # boîte de gélules (photo réelle AMLOR Pfizer) face aux fiches « comprimé » du catalogue
+    r = run(seeded, box_image(), ["AMLOR 5 mg", "28 gélules"], settings)
+    assert r["status"] != "identified" and r["verdict"] == "partial"
+    assert all(c["evidence"]["form"] == "conflict" for c in r["candidates"])
+    assert any("Forme lue sur la photo" in x and "COMPRIME" in x for x in r["reasons"])
+    # « capsules » sur une boîte de gélules : même forme, jamais une contradiction
+    lowrac = run(seeded, box_image(), ["LOWRAC 5 mg", "capsules"], settings)
+    assert lowrac["candidates"] and all(c["evidence"]["form"] == "unknown" for c in lowrac["candidates"])
+
+
+def test_laboratory_read_on_photo_is_compared_but_not_scored(seeded, settings):
+    base = run(seeded, box_image(), ["AMLOR 5 mg", "14 comprimés"], settings)
+    r = run(seeded, box_image(), ["AMLOR 5 mg", "14 comprimés", "Pfizer Pharmaceuticals"], settings)
+    top = r["candidates"][0]
+    assert top["evidence"]["laboratory"] == "conflict" and top["score"] == base["candidates"][0]["score"]
+    assert r["verdict"] == "partial" and any("Laboratoire lu sur la photo" in w for w in r["warnings"])
+    same = run(seeded, box_image(), ["AMLOR 5 mg", "14 comprimés", "Viatris Pharmaceuticals"], settings)
+    assert same["candidates"][0]["evidence"]["laboratory"] == "match" and same["verdict"] == "confirmed"
+    # non lu : aucune contradiction prétendue
+    assert base["candidates"][0]["evidence"]["laboratory"] == "unknown"
+
+
 def test_different_pack_is_a_contradiction_not_a_match(seeded, settings):
     r = run(seeded, box_image(), ["AMLOR 10 mg", "56 comprimés"], settings)
     top = r["candidates"][0]
@@ -282,6 +321,17 @@ def test_extraction_of_example_text():
     conc = extract([("ZYMAD 80 mg/ml", 50), ("flacon de 10 ml", 20)])
     assert conc.doses[0].is_concentration and conc.doses[0].mg is None and conc.pack_unit == "ml"
     assert extract([("DOLIPRANE 5OO MG", 50)]).doses == []  # jamais « corrigé » en 500 mg
+
+
+def test_short_ocr_fragments_never_produce_substances():
+    # Régression (photo réelle AMLOR) : « de », « 1 », « ل » lus isolément donnaient 100 % en partial_ratio
+    vocab = Vocabulary(substances={"acetylsalicylate de lysine": (3, "ACETYLSALICYLATE DE LYSINE"),
+                                   "vitamine b1": (17, "THIAMINE"), "براسيتامول": (1, "PARACETAMOL"),
+                                   "amlodipine": (9, "AMLODIPINE")})
+    ex = extract([("AMLOR", 119), ("5 mg", 71), ("de", 46), ("1", 28), ("ل", 24)], vocab)
+    assert ex.substances == [] and ex.brand_segments[0] == "amlor"
+    # la tolérance aux fautes OCR reste active sur une ligne de longueur comparable
+    assert [s["name"] for s in extract([("amlodipme/Amlodipin", 30)], vocab).substances] == ["AMLODIPINE"]
 
 
 # ---------- API ----------
